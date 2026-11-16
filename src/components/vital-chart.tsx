@@ -24,7 +24,7 @@ export interface VitalChartProps {
 }
 
 export function VitalChart({ entries, from, totalMinutes, label }: VitalChartProps) {
-  const { hoveredId } = useEntryHover();
+  const { hoveredIds } = useEntryHover();
 
   const plotWidth = WIDTH - PADDING.left - PADDING.right;
   const plotHeight = HEIGHT - PADDING.top - PADDING.bottom;
@@ -200,7 +200,7 @@ export function VitalChart({ entries, from, totalMinutes, label }: VitalChartPro
               ) : null}
               {entry.markers.map((marker) => {
                 const { x, y } = pointPosition(marker, entry.definition.axis);
-                const highlighted = hoveredId === marker.entryId;
+                const highlighted = hoveredIds.includes(marker.entryId);
                 return (
                   <circle
                     key={marker.entryId}

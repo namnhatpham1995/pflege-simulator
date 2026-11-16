@@ -100,8 +100,12 @@ Consecutive entries of one series, in chronological order, SHALL be joined by a 
 - **WHEN** pulse has an entry at 10:00 and no other series does
 - **THEN** only the pulse marker is drawn and the other series are unaffected
 
-### Requirement: One row per measurement kind
-Below the chart the Dashboard SHALL show one row for each of the eight kinds in the order systolic, diastolic, pulse, temperature, weight, height, pain, glucose, labelled with the unit, listing that kind's entries in the visible window as value boxes in chronological order; a row without entries SHALL be empty and neutral.
+### Requirement: One row per measurement category
+Below the chart the Dashboard SHALL show one row for each of the seven categories in the order Blutdruck, Puls, Temperatur, Gewicht, Größe, Schmerzen, Blutzucker, labelled with the unit, listing that category's entries in the visible window as value boxes in chronological order; a row without entries SHALL be empty and neutral. The Blutdruck row is labelled "systolisch/diastolisch" and shows each save as one box in the form `120/80`, not as two rows.
+
+#### Scenario: Blood pressure in one box
+- **WHEN** a blood pressure of 123 over 111 was saved for 08:00
+- **THEN** the Blutdruck row shows one box reading `123/111`, and hovering it highlights both the systolic and the diastolic chart marker
 
 #### Scenario: Two weights
 - **WHEN** weight 12 kg was saved for 10:33 and weight 13 kg for 11:00 on the visible day

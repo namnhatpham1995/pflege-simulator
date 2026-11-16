@@ -9,6 +9,9 @@ const entries = [
   makeEntry('weight-2', 'weight', 13, '2026-11-12', '11:00'),
   makeEntry('pulse-1', 'pulse', 82, '2026-11-12', '09:15'),
   makeEntry('glucose-1', 'glucose', 110, '2026-11-12', '12:00'),
+  makeEntry('sys-1', 'systolic', 123, '2026-11-12', '08:00', 'bp-1'),
+  makeEntry('dia-1', 'diastolic', 111, '2026-11-12', '08:00', 'bp-1'),
+  makeEntry('sys-2', 'systolic', 130, '2026-11-12', '13:00', 'bp-2'),
 ];
 
 function renderPanels() {
@@ -77,6 +80,27 @@ describe('EntryRows', () => {
 
     fireEvent.pointerDown(document.body, { pointerType: 'touch' });
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('shows blood pressure as one systolic/diastolic box instead of two rows', () => {
+    renderPanels();
+    expect(screen.queryByTestId('entry-row-diastolic')).not.toBeInTheDocument();
+    const row = screen.getByTestId('entry-row-systolic');
+    expect(within(row).getAllByRole('button').map((box) => box.textContent)).toEqual([
+      '123/111',
+      '130/–',
+    ]);
+    expect(row).toHaveTextContent('Blutdruck systolisch/diastolisch');
+  });
+
+  it('highlights both chart markers when a blood pressure box is hovered', () => {
+    renderPanels();
+    const box = screen.getByRole('button', { name: /123\/111 mmHg, 12\.11\.2026 08:00/ });
+    fireEvent.pointerEnter(box, { pointerType: 'mouse' });
+
+    expect(document.querySelector('circle[data-entry-id="sys-1"]')).toHaveAttribute('data-highlighted', 'true');
+    expect(document.querySelector('circle[data-entry-id="dia-1"]')).toHaveAttribute('data-highlighted', 'true');
+    expect(document.querySelector('circle[data-entry-id="sys-2"]')).not.toHaveAttribute('data-highlighted');
   });
 
   it('is read-only: no inputs, save or delete controls', () => {

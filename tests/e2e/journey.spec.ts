@@ -43,7 +43,7 @@ test('saves every category, shows them on the Dashboard and deletes one', async 
   await saveEntry(page, 'Blutzucker', { glucose: '110' }, '09:45');
 
   await page.goto(dashboardUrl(patientId));
-  await expect(page.getByTestId('entry-row-systolic').getByRole('button')).toHaveText('120');
+  await expect(page.getByTestId('entry-row-systolic').getByRole('button')).toHaveText('120/80');
   await expect(page.getByTestId('entry-row-pulse').getByRole('button')).toHaveText('82');
   await expect(page.getByTestId('entry-row-temperature').getByRole('button')).toHaveText('36,8');
   await expect(page.getByTestId('entry-row-weight').getByRole('button')).toHaveText('74,5');
