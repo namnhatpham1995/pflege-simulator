@@ -46,5 +46,6 @@ export async function saveCell(page: Page, date: string, field: string, value: s
   const input = cell.getByRole('textbox');
   await input.fill(value);
   await input.press('Enter');
-  await expect(cell.getByRole('button')).toHaveText(value);
+  // The first PATCH in a dev run also compiles the route; give it room.
+  await expect(cell.getByRole('button')).toHaveText(value, { timeout: 15_000 });
 }
