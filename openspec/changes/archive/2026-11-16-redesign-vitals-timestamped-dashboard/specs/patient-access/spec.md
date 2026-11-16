@@ -10,25 +10,6 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Independent teacher authentication
-The teacher account SHALL authenticate with one password configured on the server and SHALL NOT be subject to a length or complexity rule beyond a non-empty value; an anonymous visitor SHALL NOT receive teacher privileges.
-
-#### Scenario: Teacher signs in
-- **WHEN** the teacher submits the configured teacher password
-- **THEN** the system creates a teacher session and opens the teacher console
-
-#### Scenario: Wrong password
-- **WHEN** a visitor submits a password that is not the teacher password
-- **THEN** the system returns HTTP 401 with one generic message and sets no session cookie
-
-#### Scenario: Short password accepted
-- **WHEN** the configured teacher password is a short, simple phrase
-- **THEN** signing in with exactly that phrase succeeds
-
-#### Scenario: Anonymous visitor cannot act as teacher
-- **WHEN** a request to a teacher-only page or API carries no teacher session
-- **THEN** the system refuses it and discloses no teacher data
-
 ### Requirement: Per-request patient authorisation
 Every read and write of patient data SHALL verify on the server that the named patient exists. Any visitor, with or without a session, SHALL read any patient and add or delete that patient's measurement entries and care reports. A teacher session SHALL read every patient but SHALL NOT add or delete entries or reports; a refused request SHALL change no data.
 
@@ -85,7 +66,32 @@ Failed teacher logins SHALL be throttled by a store shared across server instanc
 - **WHEN** a teacher login succeeds before the limit is reached
 - **THEN** the failure counter for that client is cleared
 
+## ADDED Requirements
+
+### Requirement: Teacher password authentication
+The teacher account SHALL authenticate with one password configured on the server and SHALL NOT be subject to a length or complexity rule beyond a non-empty value; an anonymous visitor SHALL NOT receive teacher privileges.
+
+#### Scenario: Teacher signs in
+- **WHEN** the teacher submits the configured teacher password
+- **THEN** the system creates a teacher session and opens the teacher console
+
+#### Scenario: Wrong password
+- **WHEN** a visitor submits a password that is not the teacher password
+- **THEN** the system returns HTTP 401 with one generic message and sets no session cookie
+
+#### Scenario: Short password accepted
+- **WHEN** the configured teacher password is a short, simple phrase
+- **THEN** signing in with exactly that phrase succeeds
+
+#### Scenario: Anonymous visitor cannot act as teacher
+- **WHEN** a request to a teacher-only page or API carries no teacher session
+- **THEN** the system refuses it and discloses no teacher data
+
 ## REMOVED Requirements
+
+### Requirement: Independent teacher authentication
+**Reason**: Replaced by "Teacher password authentication": group sessions no longer exist, so the scenario about a group code acting as teacher is obsolete.
+**Migration**: The teacher signs in with the single server-configured password; an anonymous visitor is refused on teacher-only surfaces.
 
 ### Requirement: Group access-code login
 **Reason**: Students no longer sign in; the simulator holds only invented data and the access codes added friction without protecting anything.
@@ -93,4 +99,4 @@ Failed teacher logins SHALL be throttled by a store shared across server instanc
 
 ### Requirement: Access codes are generated, hashed and delivered once
 **Reason**: There are no group access codes to generate, hash or hand out.
-**Migration**: The seed no longer creates groups or prints codes; the teacher password is configured through `TEACHER_PASSWORD_HASH` as before.
+**Migration**: The seed no longer creates groups or prints codes; the teacher password is configured through the `TEACHER_PASSWORD` environment variable.

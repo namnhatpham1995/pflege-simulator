@@ -1,0 +1,201 @@
+# vitals-visualization Specification
+
+## Purpose
+Presents timestamped vital signs for a day or a week in one chart with four series and one row per measurement category, read-only, with hover linking each value box to its chart marker.
+
+## Requirements
+
+### Requirement: Default date and visible selection
+The Dashboard SHALL default the selected day to today's date in `Europe/Berlin` and the view to `Tag`, and SHALL label the selected day (Tag view) or the week range (Woche view) above the chart and the entry rows.
+
+#### Scenario: First open
+- **WHEN** a visitor opens the Dashboard without a date in the URL
+- **THEN** the view is Tag, the selected day is today in Berlin and that date is labelled above the chart and the rows
+
+#### Scenario: Selection changes
+- **WHEN** the visitor selects 2026-11-14
+- **THEN** the label above the chart and the rows shows 14.11.2026 and that day's entries are loaded
+
+#### Scenario: Week label
+- **WHEN** the Woche view is active and the selected day is 2026-11-18
+- **THEN** the label shows the range 16.11.2026 – 22.11.2026
+
+### Requirement: Independent day, month and year controls
+The date control SHALL expose day, month and year as three independently editable inputs; the day list SHALL offer only days valid for the chosen month and year, the month list SHALL offer twelve months, and the year SHALL accept free numeric entry rather than a short preset range.
+
+#### Scenario: Day list follows month length
+- **WHEN** the selected month and year are February 2028 and then February 2027
+- **THEN** the day list offers 29 days and then 28 days
+
+#### Scenario: Free year entry
+- **WHEN** the student types the year 2126
+- **THEN** the control accepts it and loads that calendar year
+
+### Requirement: Calendar popover
+A calendar button SHALL open a month-view popover that selects a full date and keeps the day, month and year inputs in sync with the chosen date.
+
+#### Scenario: Choose a date in the popover
+- **WHEN** the student opens the popover and chooses 15 March 2027
+- **THEN** the inputs show 15, March and 2027 and the workspace loads 2027-03-15
+
+### Requirement: Impossible dates are refused, not corrected
+The control SHALL reject impossible combinations such as 31 February and SHALL NOT silently clamp, roll over or shift them to another date.
+
+#### Scenario: 31 February
+- **WHEN** the student enters day 31 with February 2027
+- **THEN** the control shows an inline error, requests no data, and keeps the previously selected date active
+
+#### Scenario: Leap day
+- **WHEN** the student selects 29 February 2028 and then 29 February 2027
+- **THEN** the first is accepted and the second is refused
+
+### Requirement: Keyboard and touch operation
+The date control SHALL be operable with the keyboard alone and by pointer or touch, with labelled controls, a visible focus indicator, and Escape closing any open list or popover.
+
+#### Scenario: Keyboard only
+- **WHEN** the student tabs to the month control, opens it, moves with the arrow keys and presses Enter
+- **THEN** the month changes without a pointer
+
+#### Scenario: Escape
+- **WHEN** the student presses Escape while the calendar popover is open
+- **THEN** the popover closes and focus returns to the button that opened it
+
+### Requirement: Dates never move through timezone conversion
+The selected date SHALL be sent, stored and displayed as the same `YYYY-MM-DD` string in every client timezone and SHALL NOT pass through a UTC timestamp.
+
+#### Scenario: Client west of UTC
+- **WHEN** a client in UTC-8 selects 2026-11-12
+- **THEN** the request and the displayed value are 2026-11-12, not 2026-11-11 or 2026-11-13
+
+### Requirement: No fabricated or filled values
+The chart and the entry rows SHALL reflect only stored entries and SHALL NOT interpolate, generate or auto-fill a measurement.
+
+#### Scenario: Multi-day gap
+- **WHEN** systolic has no entry for three consecutive days between two entries
+- **THEN** the chart draws no systolic marker on those days and joins the two entries with one solid line
+
+#### Scenario: Empty window
+- **WHEN** a patient has no entries in the visible window
+- **THEN** the chart shows no markers or lines and every row is empty
+
+### Requirement: Touch selection
+On a touch device a tap on an entry value box SHALL show the same date and time label and the same chart highlight as hovering it, and a tap elsewhere SHALL dismiss both.
+
+#### Scenario: Tap on a pulse box
+- **WHEN** the visitor taps a pulse value box
+- **THEN** its date and time are shown and the matching chart marker is highlighted
+
+#### Scenario: Tap elsewhere
+- **WHEN** the visitor taps outside any value box
+- **THEN** the label and the highlight disappear
+
+### Requirement: Dashboard is read-only
+The Dashboard SHALL display stored entries only and SHALL NOT contain any input, save button or delete control.
+
+#### Scenario: No controls to change data
+- **WHEN** a visitor or the teacher views the Dashboard
+- **THEN** no control on it creates, changes or removes an entry
+
+### Requirement: Day and week views
+The Dashboard SHALL offer a `Tag` and a `Woche` view; the Woche view SHALL cover Monday to Sunday of the week containing the selected day, and previous and next buttons SHALL move the window by one day in Tag view and one week in Woche view.
+
+#### Scenario: Switch to week
+- **WHEN** the selected day is Wednesday 2026-11-18 and the visitor chooses Woche
+- **THEN** the window runs from Monday 2026-11-16 to Sunday 2026-11-22 and shows every entry in it
+
+#### Scenario: Next week
+- **WHEN** the visitor presses the next button in Woche view
+- **THEN** the window moves to 23.11.2026 – 29.11.2026
+
+#### Scenario: Previous day
+- **WHEN** the visitor presses the previous button in Tag view on 14.11.2026
+- **THEN** the selected day becomes 13.11.2026
+
+### Requirement: Four chart series
+The chart SHALL contain exactly four series — systolic in dark blue, diastolic in light blue, pulse in red and temperature in orange — each plotted against an axis labelled with its unit (`mmHg`, `Schläge/min`, `°C`), and SHALL draw a marker only where an entry exists.
+
+#### Scenario: Series and axes
+- **WHEN** the Dashboard shows a patient with entries of every charted kind
+- **THEN** four series with distinct colours are drawn and the axes are labelled mmHg, Schläge/min and °C
+
+#### Scenario: Uncharted kinds
+- **WHEN** a patient has weight, height, pain and glucose entries
+- **THEN** none of them appears on the chart
+
+### Requirement: Entries are positioned by date and time
+The chart SHALL place each entry horizontally by its date and time: the Tag view SHALL span 00:00 to 24:00 of the selected day, and the Woche view SHALL span Monday 00:00 to Sunday 24:00 with each entry at its time within its day.
+
+#### Scenario: Two entries on one day
+- **WHEN** pulse entries exist at 08:00 and 14:30 on the same day
+- **THEN** their markers have different horizontal positions in both views, the later one further right
+
+#### Scenario: Week shows every entry
+- **WHEN** the Woche view is active and entries exist on Monday and on Sunday
+- **THEN** both are drawn in one chart
+
+### Requirement: Series lines are always solid
+Consecutive entries of one series, in chronological order, SHALL be joined by a solid line regardless of the time between them, no dashed line SHALL be drawn, a lone entry SHALL appear as a marker without a line, and a gap in one series SHALL NOT change another series.
+
+#### Scenario: Gap between entries
+- **WHEN** diastolic entries exist on Monday and on Thursday and none between them
+- **THEN** the two are joined by a solid line
+
+#### Scenario: Single entry
+- **WHEN** temperature has exactly one entry in the window
+- **THEN** its marker is drawn and no temperature line is drawn
+
+#### Scenario: Series are independent
+- **WHEN** pulse has an entry at 10:00 and no other series does
+- **THEN** only the pulse marker is drawn and the other series are unaffected
+
+### Requirement: One row per measurement category
+Below the chart the Dashboard SHALL show one row for each of the seven categories in the order Blutdruck, Puls, Temperatur, Gewicht, Größe, Schmerzen, Blutzucker, labelled with the unit, listing that category's entries in the visible window as value boxes in chronological order; a row without entries SHALL be empty and neutral. The Blutdruck row is labelled "systolisch/diastolisch" and shows each save as one box in the form `120/80`, not as two rows.
+
+#### Scenario: Blood pressure in one box
+- **WHEN** a blood pressure of 123 over 111 was saved for 08:00
+- **THEN** the Blutdruck row shows one box reading `123/111`, and hovering it highlights both the systolic and the diastolic chart marker
+
+#### Scenario: Two weights
+- **WHEN** weight 12 kg was saved for 10:33 and weight 13 kg for 11:00 on the visible day
+- **THEN** the weight row shows two boxes, 12 then 13
+
+#### Scenario: Rows follow the window
+- **WHEN** the visitor switches from Tag to Woche
+- **THEN** every row lists the entries of the whole week in chronological order
+
+#### Scenario: Empty row
+- **WHEN** no height entry exists in the window
+- **THEN** the height row shows no boxes and no fault styling
+
+### Requirement: Hover reveals date and time
+Hovering or keyboard-focusing an entry value box SHALL show the entry's date and time as `TT.MM.JJJJ HH:MM`, for every kind, and the box SHALL expose the value, date and time to assistive technology.
+
+#### Scenario: Hover a weight box
+- **WHEN** the visitor hovers the weight box 12 saved for 12.11.2026 10:33
+- **THEN** the label `12.11.2026 10:33` is shown
+
+#### Scenario: Keyboard focus
+- **WHEN** the visitor tabs to a value box
+- **THEN** the same label is shown and the box announces its value, date and time
+
+### Requirement: Charted kinds highlight their chart marker
+Hovering or focusing a value box of a charted kind (systolic, diastolic, pulse, temperature) SHALL highlight that entry's marker on the chart and SHALL restore it on leaving; boxes of the other kinds SHALL show only the date and time, and highlighting SHALL NOT change the selected window.
+
+#### Scenario: Highlight a pulse marker
+- **WHEN** the visitor hovers the pulse box saved for 09:15
+- **THEN** the pulse marker at 09:15 is highlighted and the others are not
+
+#### Scenario: Leaving restores
+- **WHEN** the pointer leaves the box
+- **THEN** no marker is highlighted
+
+#### Scenario: Uncharted kind
+- **WHEN** the visitor hovers a glucose box
+- **THEN** the date and time are shown and no chart marker is highlighted
+
+### Requirement: No missing-value signalling
+The Dashboard SHALL NOT show red cells, `Fehlt` text, warnings or any other indication that a measurement is expected or absent.
+
+#### Scenario: Day with few entries
+- **WHEN** a day has a single pulse entry
+- **THEN** the Dashboard shows that entry and nothing about the other kinds being missing
