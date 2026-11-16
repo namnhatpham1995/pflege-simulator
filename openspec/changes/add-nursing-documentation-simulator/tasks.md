@@ -99,14 +99,14 @@ Owns: `src/app/api/patients/[patientId]/reports/**`, `src/server/services/report
 
 Owns: `src/app/(app)/teacher/**`, `src/app/api/patients/[patientId]/requirements/route.ts`, `src/app/api/admin/reset-class-data/route.ts`, `src/server/services/requirements.ts`, `src/server/services/reset.ts`, `src/components/expected-fields-editor.tsx`, `docs/teacher.md`. Must not touch: the schema, the visualisation components, the vitals service. Acceptance: a group gets 403 on every teacher surface, a policy change alters only that patient's warnings, and a reset keeps patients, groups and codes.
 
-- [ ] 7.1 Implement the requirements read and upsert with audit and verify integration tests for the three defaults, an enabled optional field, a disabled default and a second patient unaffected
-- [ ] 7.2 Wire `GET` and `PATCH /api/patients/:id/requirements` and verify a group session gets 403 while the teacher gets the full policy back
-- [ ] 7.3 Build the eight-switch policy editor and verify a component test shows the saved state from the server rather than an optimistic guess
-- [ ] 7.4 Implement the reset service deleting vitals, reports, revisions and audit in one transaction while keeping patients, groups, codes and requirements, and verify an integration test asserts both the deletions and the survivors
-- [ ] 7.5 Wire `POST /api/admin/reset-class-data` with the exact confirmation value and verify 400 without it, 403 for a group and 200 with counts for the teacher
-- [ ] 7.6 Build the teacher console listing all ten patients with read-only access to their workspaces and verify a group session is refused on both the page and the API
-- [ ] 7.7 Write `docs/teacher.md` on setting expectations, resetting a term and the fact that the teacher cannot edit entries, and verify the documented reset command against a scratch database
-- [ ] 7.8 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 7.1 Implement the requirements read and upsert with audit and verify integration tests for the three defaults, an enabled optional field, a disabled default and a second patient unaffected
+- [x] 7.2 Wire `GET` and `PATCH /api/patients/:id/requirements` and verify a group session gets 403 while the teacher gets the full policy back
+- [x] 7.3 Build the eight-switch policy editor and verify a component test shows the saved state from the server rather than an optimistic guess
+- [x] 7.4 Implement the reset service deleting vitals, reports, revisions and audit in one transaction while keeping patients, groups, codes and requirements, and verify an integration test asserts both the deletions and the survivors
+- [x] 7.5 Wire `POST /api/admin/reset-class-data` with the exact confirmation value and verify 400 without it, 403 for a group and 200 with counts for the teacher
+- [x] 7.6 Build the teacher console listing all ten patients with read-only access to their workspaces and verify a group session is refused on both the page and the API
+- [x] 7.7 Write `docs/teacher.md` on setting expectations, resetting a term and the fact that the teacher cannot edit entries, and verify the documented reset command against a scratch database
+- [x] 7.8 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 8. Integration & release (G7) — W2, after Groups 2–6
 

@@ -78,6 +78,9 @@ export interface VitalRecord {
 
 export type Requirements = Record<VitalField, boolean>;
 
+/** Fields a patient expects unless the teacher overrides them. */
+export const DEFAULT_EXPECTED_FIELDS: readonly VitalField[] = ['systolic', 'diastolic', 'pulse'];
+
 export interface CareReport {
   id: string;
   patientId: string;

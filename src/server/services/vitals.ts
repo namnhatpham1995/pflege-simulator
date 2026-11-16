@@ -9,7 +9,13 @@ import {
 } from '@/db/schema';
 import { HttpError, validationErrorFromZod } from '@/lib/api-error';
 import { compareDates, isValidCalendarDate } from '@/lib/date';
-import { VITAL_FIELDS, type Actor, type Requirements, type VitalRecord } from '@/lib/types';
+import {
+  DEFAULT_EXPECTED_FIELDS,
+  VITAL_FIELDS,
+  type Actor,
+  type Requirements,
+  type VitalRecord,
+} from '@/lib/types';
 import {
   changedFields,
   columnsFromValues,
@@ -63,13 +69,10 @@ export async function getRequirements(patientId: string): Promise<Requirements> 
     .from(measurementRequirements)
     .where(eq(measurementRequirements.patientId, patientId));
 
-  const requirements = Object.fromEntries(VITAL_FIELDS.map((field) => [field, false])) as Requirements;
-  if (rows.length === 0) {
-    requirements.systolic = true;
-    requirements.diastolic = true;
-    requirements.pulse = true;
-    return requirements;
-  }
+  // Per-field defaults, overridden only where the teacher stored a decision.
+  const requirements = Object.fromEntries(
+    VITAL_FIELDS.map((field) => [field, DEFAULT_EXPECTED_FIELDS.includes(field)]),
+  ) as Requirements;
   for (const row of rows) requirements[row.field] = row.isExpected === 1;
   return requirements;
 }
