@@ -30,7 +30,7 @@ Owns: the scaffold, the whole schema and its single migration, the seed, the sha
 - [x] 1.9 Implement `src/lib/date.ts` exactly as specified and verify unit tests for 29 February 2028, 29 February 2027, month lengths, `addDays` across the DST weekends, and a fixed Berlin "today" with a fake clock
 - [x] 1.10 Add the root layout, design tokens in `globals.css` and the shared `Button`, `Field` and `Dialog` primitives, and verify a component test renders each and `pnpm build` still passes
 - [x] 1.11 Configure Vitest with a per-worker libSQL file and Playwright with a `webServer`, add `pnpm verify` and `pnpm test:e2e`, and verify `pnpm verify` is green on the scaffold
-- [ ] 1.12 Add `scripts/worktree.mjs` and `docs/parallel-work.md` describing the frozen files, the groups, the waves and the merge order; verify two worktrees receive different `PORT` and `DATABASE_URL` values and the dev server starts in one
+- [x] 1.12 Add `scripts/worktree.mjs` and `docs/parallel-work.md` describing the frozen files, the groups, the waves and the merge order; verify two worktrees receive different `PORT` and `DATABASE_URL` values and the dev server starts in one
 
 ## 2. Access & shell (G1) — W1
 

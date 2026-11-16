@@ -26,6 +26,9 @@ next-env.d.ts
 .worktrees/
 plans/
 
+# Local agent configuration and skills (developer machine only)
+.agents/
+
 # Tests
 coverage/
 playwright-report/

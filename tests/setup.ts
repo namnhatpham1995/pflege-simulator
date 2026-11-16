@@ -1,3 +1,4 @@
+import { afterEach } from 'vitest';
 import { hashPassword } from '@/server/auth/password';
 
 /**
@@ -18,4 +19,6 @@ process.env.DATABASE_URL =
 
 if (typeof document !== 'undefined') {
   await import('@testing-library/jest-dom/vitest');
+  const { cleanup } = await import('@testing-library/react');
+  afterEach(() => cleanup());
 }

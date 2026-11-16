@@ -45,12 +45,18 @@ function nextSlot() {
 }
 
 function run(command, args, options = {}) {
-  // No shell: avoids argument-escaping issues and the DEP0190 warning on Windows.
-  const executable = process.platform === 'win32' && command === 'npm' ? 'npm.cmd' : command;
-  const result = spawnSync(executable, args, {
-    cwd: options.cwd ?? root,
-    stdio: 'inherit',
-  });
+  // On Windows npm is a .cmd shim, which needs cmd.exe; passing the fixed
+  // arguments through /c avoids shell quoting and the DEP0190 warning.
+  const isWindowsNpm = process.platform === 'win32' && command === 'npm';
+  const result = isWindowsNpm
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', `npm ${args.join(' ')}`], {
+        cwd: options.cwd ?? root,
+        stdio: 'inherit',
+      })
+    : spawnSync(command, args, {
+        cwd: options.cwd ?? root,
+        stdio: 'inherit',
+      });
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} ist mit Status ${result.status} beendet worden.`);
   }
