@@ -13,20 +13,15 @@ Lehrkraft-Anmeldung, Audit-Zeilen für jede Änderung und der Klassendaten-Reset
 ## Lehrkraft-Anmeldung
 
 Nur die Lehrkraft meldet sich an: `POST /api/auth/login` mit `{ "password": "…" }`. Geprüft
-wird per scrypt gegen `TEACHER_PASSWORD_HASH` aus der Server-Umgebung. Es gibt keine
+wird gegen `TEACHER_PASSWORD` aus der Server-Umgebung geprüft (zeitkonstanter Vergleich). Es gibt keine
 Mindestlänge und keine Komplexitätsregel – ein kurzer Merksatz genügt.
 
 Fehlermeldungen sind absichtlich generisch („Das Passwort ist falsch.“); die Antwort verrät
 nicht, ob ein Konto existiert.
 
-```bash
-npm run hash-password -- "kurzer Merksatz"   # gibt einen scrypt-Hash aus
-npm run hash-password -- --write             # erzeugt Passwort + SESSION_SECRET in .env.local
-```
-
-`--write` legt das Klartext-Passwort einmalig in `.local/teacher-credentials.txt` ab. Danach
-existiert nur der Hash. `TEACHER_PASSWORD_HASH` gehört ausschließlich in die Server-Umgebung
-(lokal `.env.local`, produktiv Vercel-Projektvariablen), nie in eine `NEXT_PUBLIC_`-Variable.
+`TEACHER_PASSWORD` steht im Klartext in der Server-Umgebung (lokal `.env.local`, produktiv
+Vercel-Projektvariablen), nie in einer `NEXT_PUBLIC_`-Variable und nie im Repository. Ändern:
+Variable anpassen und neu deployen.
 
 ## Sitzungen
 

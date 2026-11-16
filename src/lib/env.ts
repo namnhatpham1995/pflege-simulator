@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-const SCRYPT_HASH_PATTERN = /^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]+\$[0-9a-f]+$/;
-
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().trim().min(1).default('file:./.local/dev.db'),
@@ -10,10 +8,7 @@ export const envSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(32, 'SESSION_SECRET muss mindestens 32 Zeichen lang sein.'),
-  TEACHER_PASSWORD_HASH: z
-    .string()
-    .trim()
-    .regex(SCRYPT_HASH_PATTERN, 'TEACHER_PASSWORD_HASH muss das Format scrypt$N$r$p$salt$hash haben.'),
+  TEACHER_PASSWORD: z.string().min(1, 'TEACHER_PASSWORD darf nicht leer sein.'),
   TEACHER_DISPLAY_NAME: z.string().trim().min(1).default('Lehrkraft'),
   APP_ORIGIN: z.string().url().default('http://localhost:3000'),
 });

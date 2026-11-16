@@ -6,7 +6,7 @@ und der Zugang ist absichtlich offen.
 ## Vorbereitung
 
 - [ ] `npm run db:migrate` und `npm run db:seed` gegen die Zielumgebung ausgeführt.
-- [ ] Lehrkraft-Login mit `TEACHER_PASSWORD_HASH` getestet.
+- [ ] Lehrkraft-Login mit `TEACHER_PASSWORD` getestet.
 - [ ] `Start` auf der Frontseite getestet: Patientinnenliste ohne Anmeldung erreichbar.
 - [ ] Backup vor dem Pilot gezogen (`turso db shell … .dump`), falls schon Klassendaten
       existieren.

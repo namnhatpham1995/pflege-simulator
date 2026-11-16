@@ -1,5 +1,4 @@
 import { afterEach } from 'vitest';
-import { hashPassword } from '@/server/auth/password';
 
 /**
  * Deterministic, non-production defaults so tests never depend on a local .env
@@ -10,8 +9,7 @@ const mutableEnv = process.env as Record<string, string | undefined>;
 mutableEnv.NODE_ENV = process.env.NODE_ENV ?? 'test';
 process.env.SESSION_SECRET =
   process.env.SESSION_SECRET ?? 'test-session-secret-0123456789abcdef';
-process.env.TEACHER_PASSWORD_HASH =
-  process.env.TEACHER_PASSWORD_HASH ?? hashPassword('lehrer-test-passwort');
+process.env.TEACHER_PASSWORD = process.env.TEACHER_PASSWORD ?? 'lehrer-test-passwort';
 process.env.TEACHER_DISPLAY_NAME = process.env.TEACHER_DISPLAY_NAME ?? 'Test-Lehrkraft';
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??

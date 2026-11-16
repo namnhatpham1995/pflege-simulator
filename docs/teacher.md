@@ -64,4 +64,4 @@ gelöscht (`400`), ohne Lehrkraft-Sitzung antwortet die Route `401`.
 - Keine Noten, keine Auswertungen, keine Benachrichtigungen.
 - Kein Bearbeiten oder Löschen einzelner Schülereinträge.
 - Ein zweiter Lehrkraft-Account ist nicht vorgesehen; die Anmeldung erfolgt über
-  `TEACHER_PASSWORD_HASH` aus der Server-Umgebung.
+  `TEACHER_PASSWORD` aus der Server-Umgebung.

@@ -3,12 +3,11 @@ import { loginAttempts, sessions } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
 import { resetEnvCache } from '@/lib/env';
 import { GENERIC_LOGIN_FAILURE, loginAsTeacher } from '@/server/auth/login';
-import { hashPassword } from '@/server/auth/password';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
-const originalHash = process.env.TEACHER_PASSWORD_HASH;
+const originalPassword = process.env.TEACHER_PASSWORD;
 const originalSecret = process.env.SESSION_SECRET;
 
 async function expectHttpError(promise: Promise<unknown>, status: number, code?: string) {
@@ -33,7 +32,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  process.env.TEACHER_PASSWORD_HASH = originalHash;
+  process.env.TEACHER_PASSWORD = originalPassword;
   process.env.SESSION_SECRET = originalSecret;
   resetEnvCache();
 });
@@ -56,7 +55,7 @@ describe('teacher login', () => {
   });
 
   it('accepts a short, simple phrase', async () => {
-    process.env.TEACHER_PASSWORD_HASH = hashPassword('kurz');
+    process.env.TEACHER_PASSWORD = 'kurz';
     resetEnvCache();
 
     const result = await loginAsTeacher('kurz', { ip: '10.0.1.2' });

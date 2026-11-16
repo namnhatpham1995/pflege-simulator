@@ -50,7 +50,7 @@ Umgebungsvariablen im Projekt (Production und Preview getrennt prüfen):
 | `TURSO_DATABASE_URL` | ja | libSQL-URL der Produktionsdatenbank |
 | `TURSO_AUTH_TOKEN` | ja | Token für genau diese Datenbank |
 | `SESSION_SECRET` | ja | Pepper für Session-Hashes, mindestens 32 Zeichen |
-| `TEACHER_PASSWORD_HASH` | ja | scrypt-Hash aus `npm run hash-password` |
+| `TEACHER_PASSWORD` | ja | Lehrkraft-Passwort im Klartext |
 | `TEACHER_DISPLAY_NAME` | nein | Anzeigename, Standard „Lehrkraft“ |
 
 Ablauf: Branch nach `main` mergen → Vercel baut → `npm run db:migrate` **vor** dem ersten

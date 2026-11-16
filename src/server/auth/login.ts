@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { HttpError } from '@/lib/api-error';
 import { getEnv } from '@/lib/env';
 import type { Actor } from '@/lib/types';
-import { verifyPassword } from './password';
 import {
   assertLoginAllowed,
   clearCodeAttempts,
@@ -27,6 +26,12 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+/** Constant-time comparison of two strings of any length. */
+function passwordMatches(given: string, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(given), digest(expected));
+}
+
 const TEACHER_CODE_KEY = 'code:teacher';
 
 export async function loginAsTeacher(
@@ -42,7 +47,7 @@ export async function loginAsTeacher(
   await assertLoginAllowed(keys);
 
   const env = getEnv();
-  if (!verifyPassword(password, env.TEACHER_PASSWORD_HASH)) {
+  if (!passwordMatches(password, env.TEACHER_PASSWORD)) {
     await registerFailedAttempt(keys);
     throw HttpError.unauthenticated(GENERIC_LOGIN_FAILURE);
   }

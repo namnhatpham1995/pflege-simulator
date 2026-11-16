@@ -21,7 +21,7 @@ src/app/layout.tsx  src/app/globals.css  src/app/page.tsx
 src/db/schema.ts  src/db/client.ts  src/db/migrate.ts  src/db/seed.ts
 src/lib/types.ts  src/lib/date.ts  src/lib/api-error.ts  src/lib/env.ts  src/lib/cn.ts
 src/components/ui/**
-src/server/auth/password.ts  src/server/auth/session.ts  src/server/services/access.ts
+src/server/auth/session.ts  src/server/services/access.ts
 tests/setup.ts  tests/helpers/database.ts  vitest.config.ts  playwright.config.ts
 ```
 
