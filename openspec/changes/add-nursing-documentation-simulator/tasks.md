@@ -85,15 +85,15 @@ Owns: `src/components/vital-chart.tsx`, `src/components/vitals-table.tsx`, `src/
 
 Owns: `src/app/api/patients/[patientId]/reports/**`, `src/server/services/reports.ts`, `src/lib/validation/reports.ts`, `src/app/(app)/patients/[patientId]/pflegebericht/page.tsx`, `src/components/care-report-*.tsx`, `docs/pflegebericht.md`. Must not touch: the schema, `src/components/vitals-*`, the patient layout. Acceptance: several reports coexist on one day, a concurrent edit is a 409, and every accepted edit leaves one immutable revision.
 
-- [ ] 6.1 Implement report validation (date, `HH:MM`, shift enum, trimmed 1–10,000 character body) and verify unit tests for whitespace, an unknown shift and an over-long body
-- [ ] 6.2 Implement create and cursor-paginated chronological listing and verify integration tests for two reports on the same date and shift, newest-first order and a stable tie-break
-- [ ] 6.3 Implement the edit transaction with version guard, previous-body revision and 409 payload, and verify integration tests for a concurrent edit, one revision per accepted edit and an unchanged body after a refused edit
-- [ ] 6.4 Wire the three report routes and the revisions route and verify contract tests for 401, 403, 400, 404 and 409
-- [ ] 6.5 Build the form with native date and time inputs, shift selector, character counter and server-confirmed saved state, and verify component tests for a refused save keeping the text and the counter near the limit
-- [ ] 6.6 Build the list with date, time, shift, body, edited marker and a read-only history view, and verify component tests for ordering, the marker and the absence of any edit control in history
-- [ ] 6.7 Compose the Pflegebericht page and verify it renders for an authorised group and refuses another group
-- [ ] 6.8 Write `docs/pflegebericht.md` on the shift semantics, local date and time storage and the revision behaviour, and verify its statements against the integration tests
-- [ ] 6.9 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 6.1 Implement report validation (date, `HH:MM`, shift enum, trimmed 1–10,000 character body) and verify unit tests for whitespace, an unknown shift and an over-long body
+- [x] 6.2 Implement create and cursor-paginated chronological listing and verify integration tests for two reports on the same date and shift, newest-first order and a stable tie-break
+- [x] 6.3 Implement the edit transaction with version guard, previous-body revision and 409 payload, and verify integration tests for a concurrent edit, one revision per accepted edit and an unchanged body after a refused edit
+- [x] 6.4 Wire the three report routes and the revisions route and verify contract tests for 401, 403, 400, 404 and 409
+- [x] 6.5 Build the form with native date and time inputs, shift selector, character counter and server-confirmed saved state, and verify component tests for a refused save keeping the text and the counter near the limit
+- [x] 6.6 Build the list with date, time, shift, body, edited marker and a read-only history view, and verify component tests for ordering, the marker and the absence of any edit control in history
+- [x] 6.7 Compose the Pflegebericht page and verify it renders for an authorised group and refuses another group
+- [x] 6.8 Write `docs/pflegebericht.md` on the shift semantics, local date and time storage and the revision behaviour, and verify its statements against the integration tests
+- [x] 6.9 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 7. Teacher console (G6) — W2, after Group 3
 

@@ -18,6 +18,7 @@ import {
   valuesFromRecord,
 } from '@/lib/vitals';
 import { crossFieldErrors, vitalsPatchSchema } from '@/lib/validation/vitals';
+import { serialiseWrites } from '@/server/write-queue';
 
 export const MAX_RANGE_DAYS = 31;
 
@@ -55,22 +56,6 @@ function isUniqueViolation(error: unknown): boolean {
   return /unique constraint failed|sqlite_constraint/i.test(message);
 }
 
-/**
- * The libSQL client shares one connection per process, so two overlapping
- * transactions would refuse to start. Classroom throughput is tiny; writes are
- * queued instead. Across processes the version check and the unique constraint
- * still protect the data.
- */
-let writeQueue: Promise<unknown> = Promise.resolve();
-
-function serialiseWrites<T>(work: () => Promise<T>): Promise<T> {
-  const result = writeQueue.then(work, work);
-  writeQueue = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
-}
 
 export async function getRequirements(patientId: string): Promise<Requirements> {
   const rows = await db
