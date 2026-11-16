@@ -9,13 +9,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { buildWindowDates } from '@/lib/chart-segments';
+import {
+  buildWindowDates,
+  WINDOW_AFTER,
+  WINDOW_BEFORE,
+} from '@/lib/chart-segments';
 import { addDays } from '@/lib/date';
 import type { Requirements, VitalField, VitalRecord } from '@/lib/types';
 import { emptyValues, valuesFromRecord, type VitalValues } from '@/lib/vitals';
-
-export const WINDOW_BEFORE = 7;
-export const WINDOW_AFTER = 6;
 
 export interface ConflictInfo {
   date: string;

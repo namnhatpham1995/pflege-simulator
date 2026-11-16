@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
-const baseURL = `http://127.0.0.1:${PORT}`;
+// Next's dev runtime treats 127.0.0.1 as a different origin from localhost and
+// blocks its client resources, which prevents hydration.
+const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -16,9 +18,13 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `npm run dev -- --port ${PORT}`,
+    command: `npm run e2e:seed && npm run dev -- --port ${PORT}`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: false,
+    timeout: 180_000,
+    env: {
+      DATABASE_URL: 'file:./.local/e2e.db',
+      E2E_PORT: String(PORT),
+    },
   },
 });

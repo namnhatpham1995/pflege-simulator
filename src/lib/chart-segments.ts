@@ -1,3 +1,6 @@
+export const WINDOW_BEFORE = 7;
+export const WINDOW_AFTER = 6;
+
 export interface SeriesPoint {
   date: string;
   value: number;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
 import type { VitalField } from '@/lib/types';
 import { useVitalView } from '@/state/vital-view';
@@ -29,6 +29,30 @@ export function VitalCellEditor({
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    },
+    [],
+  );
+
+  function cancelHold() {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }
+
+  /** Touch users can press and hold a cell instead of tapping it. */
+  function beginHold() {
+    cancelHold();
+    holdTimer.current = setTimeout(() => {
+      holdTimer.current = null;
+      startEditing();
+    }, 450);
+  }
 
   function startEditing() {
     setDraft(value === null ? '' : String(value));
@@ -60,6 +84,10 @@ export function VitalCellEditor({
       <button
         type="button"
         onClick={startEditing}
+        onPointerDown={beginHold}
+        onPointerUp={cancelHold}
+        onPointerLeave={cancelHold}
+        onPointerCancel={cancelHold}
         aria-label={`${label} am ${date} ${value === null ? 'fehlt' : `= ${value} ${unit}`}`}
         className={cn(
           'h-8 w-full rounded px-1 text-sm tabular-nums',

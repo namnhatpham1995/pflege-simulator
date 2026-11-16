@@ -112,16 +112,16 @@ Owns: `src/app/(app)/teacher/**`, `src/app/api/patients/[patientId]/requirements
 
 Owns: `src/app/(app)/patients/[patientId]/vitalwerte/**`, `src/app/(app)/patients/[patientId]/page.tsx`, `tests/e2e/**`, `docs/runbook.md`, `docs/class-pilot.md`. Must not touch: the components it composes, the services, the schema. Acceptance: the full student journey works in a browser, the ten codes work, isolation holds through direct API calls, and a backup restores.
 
-- [ ] 8.1 Compose the Vitalwerte page from the picker, provider, chart, table and warning, and verify `pnpm build` plus a smoke test that the first render contains the selected date above both surfaces
-- [ ] 8.2 Add the patient landing redirect and the section navigation, and verify a click-through test lands on Vitalwerte and back on Pflegebericht
-- [ ] 8.3 Write the Playwright journey: group login, save a value, reload, confirm persistence, edit to force a 409, and verify `pnpm test:e2e` passes on a clean database
-- [ ] 8.4 Add the interaction tests for chart↔table hover sync, the full-column highlight, the red cell inside it, the warning clearing after save, 29 February 2028 versus 2027, and touch tap and press-and-hold
-- [ ] 8.5 Add an accessibility pass over the workspace (labels, focus order, `aria-live`, non-colour missing indicator) and verify the checks run in the browser suite
-- [ ] 8.6 Write `docs/runbook.md` covering Turso provisioning, migration and seed from a controlled machine, Vercel environment variables, backup with `turso db shell .dump`, restore into a scratch database and rollback; verify each command against the non-production database
-- [ ] 8.7 Write `docs/class-pilot.md` with the ten-group check, second-device check, isolation attempt and end-of-term reset, and verify it against a seeded local database
+- [x] 8.1 Compose the Vitalwerte page from the picker, provider, chart, table and warning, and verify `pnpm build` plus a smoke test that the first render contains the selected date above both surfaces
+- [x] 8.2 Add the patient landing redirect and the section navigation, and verify a click-through test lands on Vitalwerte and back on Pflegebericht
+- [x] 8.3 Write the Playwright journey: group login, save a value, reload, confirm persistence, edit to force a 409, and verify `pnpm test:e2e` passes on a clean database
+- [x] 8.4 Add the interaction tests for chart↔table hover sync, the full-column highlight, the red cell inside it, the warning clearing after save, 29 February 2028 versus 2027, and touch tap and press-and-hold
+- [x] 8.5 Add an accessibility pass over the workspace (labels, focus order, `aria-live`, non-colour missing indicator) and verify the checks run in the browser suite
+- [x] 8.6 Write `docs/runbook.md` covering Turso provisioning, migration and seed from a controlled machine, Vercel environment variables, backup with `turso db shell .dump`, restore into a scratch database and rollback; verify each command against the non-production database
+- [x] 8.7 Write `docs/class-pilot.md` with the ten-group check, second-device check, isolation attempt and end-of-term reset, and verify it against a seeded local database
 - [ ] 8.8 After the owner confirms the Vercel plan and authorizes deployment, deploy with the Turso resource, run the production smoke (one group login, one save, one report, teacher read), and verify all ten codes and a cross-group API attempt on the deployed URL
 - [ ] 8.9 Rehearse the backup and restore into a scratch database and record the result in `docs/runbook.md`
-- [ ] 8.10 Run `pnpm verify` and the full browser suite on the final integration branch, and report the commands and exit statuses
+- [x] 8.10 Run `pnpm verify` and the full browser suite on the final integration branch, and report the commands and exit statuses
 
 ## Workflow follow-up
 
