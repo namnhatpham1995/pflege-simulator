@@ -72,14 +72,14 @@ Owns: `src/components/date-parts-picker.tsx`, `src/components/calendar-popover.t
 
 Owns: `src/components/vital-chart.tsx`, `src/components/vitals-table.tsx`, `src/components/vital-cell-editor.tsx`, `src/components/missing-values-warning.tsx`, `src/lib/chart-segments.ts`, `src/lib/missing-value-policy.ts`, `src/state/vital-view.tsx`, their tests. Must not touch: API routes, the page that composes them, `src/lib/date.ts`. Acceptance: the segment builder reproduces the example table, a full date column highlights from either surface, and a missing required cell is red and announced.
 
-- [ ] 5.1 Implement `buildSeriesSegments` and verify a table-driven test reproducing the plan's 10–13 November example plus single point, all null, leading gap and trailing gap
-- [ ] 5.2 Implement `getMissingFields` against the requirements set and verify tests for an expected blank, an optional blank and a stored 0
-- [ ] 5.3 Implement `VitalViewProvider` with `selectedDate`, `hoveredDate`, `activeDate = hovered ?? selected`, window fetch with abort and stale-response rejection, and verify unit tests for hover, leave, select and a failed save keeping the typed value
-- [ ] 5.4 Build the eight-row table with full-height active-column highlight, focus-distinct editor, red missing cells with `Fehlt` and accessible text, and verify component tests for the column highlight, the focus outline and a red cell inside the highlighted column
-- [ ] 5.5 Build the SVG chart with exactly three series, dual labelled axes, one pointer band per date, markers only for stored values and dashed segments from the builder, and verify component tests for the marker count, the dash count and `mmHg` / `Schläge/min` labels
-- [ ] 5.6 Build the warning with the German date and field list and `aria-live="polite"`, and verify tests for the missing list, an empty list and an update after a save
-- [ ] 5.7 Add responsive horizontal scrolling and touch tap and press-and-hold, and verify tests with a narrow container and pointer events
-- [ ] 5.8 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 5.1 Implement `buildSeriesSegments` and verify a table-driven test reproducing the plan's 10–13 November example plus single point, all null, leading gap and trailing gap
+- [x] 5.2 Implement `getMissingFields` against the requirements set and verify tests for an expected blank, an optional blank and a stored 0
+- [x] 5.3 Implement `VitalViewProvider` with `selectedDate`, `hoveredDate`, `activeDate = hovered ?? selected`, window fetch with abort and stale-response rejection, and verify unit tests for hover, leave, select and a failed save keeping the typed value
+- [x] 5.4 Build the eight-row table with full-height active-column highlight, focus-distinct editor, red missing cells with `Fehlt` and accessible text, and verify component tests for the column highlight, the focus outline and a red cell inside the highlighted column
+- [x] 5.5 Build the SVG chart with exactly three series, dual labelled axes, one pointer band per date, markers only for stored values and dashed segments from the builder, and verify component tests for the marker count, the dash count and `mmHg` / `Schläge/min` labels
+- [x] 5.6 Build the warning with the German date and field list and `aria-live="polite"`, and verify tests for the missing list, an empty list and an update after a save
+- [x] 5.7 Add responsive horizontal scrolling and touch tap and press-and-hold, and verify tests with a narrow container and pointer events
+- [x] 5.8 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 6. Pflegebericht (G5) — W1
 
