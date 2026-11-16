@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
-import { patients, sessions, studentGroups } from '@/db/schema';
+import { sessions } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
 import { getEnv } from '@/lib/env';
 import { SESSION_COOKIE_NAME, type Actor } from '@/lib/types';
@@ -41,29 +41,6 @@ export async function destroySession(token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.idHash, hashSessionToken(token)));
 }
 
-async function resolveGroupActor(groupId: string): Promise<Actor | null> {
-  const rows = await db
-    .select({
-      groupId: studentGroups.id,
-      groupName: studentGroups.displayName,
-      isActive: studentGroups.isActive,
-      patientId: patients.id,
-    })
-    .from(studentGroups)
-    .innerJoin(patients, eq(patients.id, studentGroups.patientId))
-    .where(eq(studentGroups.id, groupId))
-    .limit(1);
-
-  const row = rows[0];
-  if (!row || row.isActive !== 1) return null;
-  return {
-    type: 'group',
-    id: row.groupId,
-    displayName: row.groupName,
-    patientId: row.patientId,
-  };
-}
-
 export async function resolveActorFromToken(token: string): Promise<Actor | null> {
   const idHash = hashSessionToken(token);
   const rows = await db.select().from(sessions).where(eq(sessions.idHash, idHash)).limit(1);
@@ -98,7 +75,8 @@ export async function resolveActorFromToken(token: string): Promise<Actor | null
     };
   }
 
-  return resolveGroupActor(row.actorId);
+  // Group sessions are gone; an old row is simply not an actor any more.
+  return null;
 }
 
 export function readCookieValue(cookieHeader: string | null, name: string): string | undefined {

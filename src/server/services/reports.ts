@@ -11,6 +11,7 @@ import {
 import { HttpError, validationErrorFromZod } from '@/lib/api-error';
 import type { Actor, CareReport, CareReportRevision } from '@/lib/types';
 import { careReportCreateSchema, careReportUpdateSchema } from '@/lib/validation/reports';
+import { assertStudentWrite } from '@/server/services/access';
 import { serialiseWrites } from '@/server/write-queue';
 
 export const DEFAULT_REPORT_LIMIT = 20;
@@ -21,8 +22,9 @@ function toReport(row: CareReportRow): CareReport {
 }
 
 function requireGroupWriter(actor: Actor, patientId: string): void {
-  if (actor.type !== 'group' || actor.patientId !== patientId) {
-    throw HttpError.forbidden('Nur die zugeordnete Gruppe darf Pflegeberichte schreiben.');
+  assertStudentWrite(actor);
+  if (actor.patientId !== patientId) {
+    throw HttpError.forbidden('Pflegeberichte können nur im eigenen Patientenbereich geschrieben werden.');
   }
 }
 
@@ -105,7 +107,7 @@ export async function createReport(
       .values({
         id: randomUUID(),
         patientId,
-        groupId: actor.type === 'group' ? actor.id : null,
+        groupId: null,
         observedDate: data.observedDate,
         observedTime: data.observedTime,
         shift: data.shift,

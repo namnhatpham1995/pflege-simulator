@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
-import { measurementRequirements, patients, studentGroups } from '@/db/schema';
+import { eq, sql } from 'drizzle-orm';
+import { patients, studentGroups } from '@/db/schema';
 import { seedDatabase } from '@/db/seed';
 import { createTestDatabase, type TestDatabase } from '../helpers/database';
 
@@ -17,62 +17,44 @@ afterAll(async () => {
 async function counts() {
   const [patientCount] = await testDb.db.select({ value: sql<number>`count(*)` }).from(patients);
   const [groupCount] = await testDb.db.select({ value: sql<number>`count(*)` }).from(studentGroups);
-  const [requirementCount] = await testDb.db
-    .select({ value: sql<number>`count(*)` })
-    .from(measurementRequirements);
-  return {
-    patients: patientCount?.value ?? 0,
-    groups: groupCount?.value ?? 0,
-    requirements: requirementCount?.value ?? 0,
-  };
+  return { patients: patientCount?.value ?? 0, groups: groupCount?.value ?? 0 };
 }
 
 describe('idempotent seed', () => {
-  it('creates exactly ten patients, ten groups and eight requirements each', async () => {
-    const first = await seedDatabase(testDb.db, { writeCodeFile: false });
-    expect(first.createdGroups).toBe(10);
-    expect(await counts()).toEqual({ patients: 10, groups: 10, requirements: 80 });
+  it('creates exactly ten patients and no groups', async () => {
+    const first = await seedDatabase(testDb.db);
+    expect(first.createdPatients).toBe(10);
+    expect(await counts()).toEqual({ patients: 10, groups: 0 });
   });
 
-  it('keeps identifiers and access-code hashes stable on a second run', async () => {
-    const before = await testDb.db
-      .select({
-        id: studentGroups.id,
-        hash: studentGroups.accessCodeHash,
-        patientId: studentGroups.patientId,
-      })
-      .from(studentGroups);
+  it('changes nothing on a second run and keeps identifiers stable', async () => {
+    const before = await testDb.db.select().from(patients).orderBy(patients.id);
 
-    const second = await seedDatabase(testDb.db, { writeCodeFile: false });
-    expect(second.createdGroups).toBe(0);
-    expect(second.codes).toHaveLength(0);
-    expect(await counts()).toEqual({ patients: 10, groups: 10, requirements: 80 });
+    const second = await seedDatabase(testDb.db);
+    expect(second.createdPatients).toBe(0);
+    expect(await counts()).toEqual({ patients: 10, groups: 0 });
 
-    const after = await testDb.db
-      .select({
-        id: studentGroups.id,
-        hash: studentGroups.accessCodeHash,
-        patientId: studentGroups.patientId,
-      })
-      .from(studentGroups);
-
+    const after = await testDb.db.select().from(patients).orderBy(patients.id);
     expect(after).toEqual(before);
   });
 
-  it('gives every group its own patient and a distinct hash', async () => {
-    const rows = await testDb.db.select().from(studentGroups);
-    expect(new Set(rows.map((row) => row.patientId)).size).toBe(10);
-    expect(new Set(rows.map((row) => row.accessCodeHash)).size).toBe(10);
-    for (const row of rows) {
-      expect(row.accessCodeHash.startsWith('scrypt$')).toBe(true);
-    }
+  it('starts every patient without a date of birth', async () => {
+    const rows = await testDb.db.select().from(patients);
+    expect(rows.every((row) => row.dateOfBirth === null)).toBe(true);
   });
 
-  it('marks systolic, diastolic and pulse expected and the other five optional', async () => {
-    const rows = await testDb.db.select().from(measurementRequirements);
-    const expectedFields = new Set(
-      rows.filter((row) => row.isExpected === 1).map((row) => row.field),
-    );
-    expect([...expectedFields].sort()).toEqual(['diastolic', 'pulse', 'systolic']);
+  it('does not overwrite a name the teacher changed', async () => {
+    const [first] = await testDb.db.select().from(patients).orderBy(patients.id).limit(1);
+    if (!first) throw new Error('Kein Patient vorhanden.');
+    await testDb.db
+      .update(patients)
+      .set({ displayName: 'Herr Berger', dateOfBirth: '1948-03-07' })
+      .where(eq(patients.id, first.id));
+
+    await seedDatabase(testDb.db);
+
+    const rows = await testDb.db.select().from(patients).where(eq(patients.id, first.id));
+    expect(rows[0]?.displayName).toBe('Herr Berger');
+    expect(rows[0]?.dateOfBirth).toBe('1948-03-07');
   });
 });

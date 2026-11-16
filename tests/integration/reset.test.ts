@@ -3,22 +3,21 @@ import {
   auditLog,
   careReportRevisions,
   careReports,
-  measurementRequirements,
   patients,
-  studentGroups,
-  vitalDailyRecords,
+  vitalEntries,
 } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
 import type { Actor } from '@/lib/types';
+import { anonymousActor } from '@/server/services/access';
 import { createReport, updateReport } from '@/server/services/reports';
 import { resetClassData } from '@/server/services/reset';
-import { saveVitalsDay } from '@/server/services/vitals';
+import { createEntries } from '@/server/services/vitals';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
 
-const group: Actor = { type: 'group', id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1' };
+const student = anonymousActor('p-1');
 const teacher: Actor = { type: 'teacher', id: 'teacher', displayName: 'Lehrkraft' };
 
 async function expectStatus(promise: Promise<unknown>, status: number) {
@@ -34,18 +33,12 @@ async function expectStatus(promise: Promise<unknown>, status: number) {
 
 beforeAll(async () => {
   db = await appDatabase();
-  const now = new Date().toISOString();
-  await db.insert(patients).values({ id: 'p-1', displayName: 'Frau Albrecht', createdAt: now });
-  await db.insert(studentGroups).values({
-    id: 'g-1',
-    displayName: 'Gruppe 1',
-    patientId: 'p-1',
-    accessCodeHash: 'scrypt$1$1$1$00$00',
-    isActive: 1,
+  await db.insert(patients).values({
+    id: 'p-1',
+    displayName: 'Frau Albrecht',
+    dateOfBirth: '1948-03-07',
+    createdAt: new Date().toISOString(),
   });
-  await db
-    .insert(measurementRequirements)
-    .values({ patientId: 'p-1', field: 'glucose', isExpected: 1 });
 });
 
 afterAll(async () => {
@@ -54,52 +47,49 @@ afterAll(async () => {
 });
 
 describe('resetClassData', () => {
-  it('deletes vitals, reports, revisions and audit in one transaction', async () => {
-    await saveVitalsDay(group, 'p-1', '2026-11-10', {
-      version: 0,
-      values: { systolic: 120, diastolic: 80, pulse: 70 },
+  it('deletes entries, reports, revisions and audit in one transaction', async () => {
+    await createEntries(student, 'p-1', {
+      category: 'puls',
+      values: { pulse: 70 },
+      date: '2026-11-10',
+      time: '08:00',
     });
-    await saveVitalsDay(group, 'p-1', '2026-11-11', {
-      version: 0,
-      values: { systolic: 118, diastolic: 78, pulse: 72 },
+    await createEntries(student, 'p-1', {
+      category: 'blutdruck',
+      values: { systolic: 120, diastolic: 80 },
+      date: '2026-11-10',
+      time: '09:00',
     });
 
-    const report = await createReport(group, 'p-1', {
+    const report = await createReport(student, 'p-1', {
       observedDate: '2026-11-10',
       observedTime: '08:00',
       shift: 'frueh',
       body: 'Ausgangstext.',
     });
-    await updateReport(group, 'p-1', report.id, { version: 1, body: 'Korrigiert.' });
+    await updateReport(student, 'p-1', report.id, { version: 1, body: 'Korrigiert.' });
 
     const deleted = await resetClassData(teacher, 'RESET');
-    expect(deleted.vitals).toBe(2);
+    expect(deleted.entries).toBe(3);
     expect(deleted.reports).toBe(1);
     expect(deleted.revisions).toBe(1);
     expect(deleted.audit).toBeGreaterThanOrEqual(4);
 
-    expect(await db.select().from(vitalDailyRecords)).toHaveLength(0);
+    expect(await db.select().from(vitalEntries)).toHaveLength(0);
     expect(await db.select().from(careReports)).toHaveLength(0);
     expect(await db.select().from(careReportRevisions)).toHaveLength(0);
     expect(await db.select().from(auditLog)).toHaveLength(0);
   });
 
-  it('keeps patients, groups, code hashes and the policy', async () => {
-    const patientsRows = await db.select().from(patients);
-    expect(patientsRows).toHaveLength(1);
-
-    const groups = await db.select().from(studentGroups);
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.accessCodeHash).not.toBe('');
-
-    const requirements = await db.select().from(measurementRequirements);
-    expect(requirements).toEqual([
-      expect.objectContaining({ patientId: 'p-1', field: 'glucose', isExpected: 1 }),
-    ]);
+  it('keeps the patients with their names and dates of birth', async () => {
+    const rows = await db.select().from(patients);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.displayName).toBe('Frau Albrecht');
+    expect(rows[0]?.dateOfBirth).toBe('1948-03-07');
   });
 
-  it('refuses a wrong confirmation and a group actor', async () => {
+  it('refuses a wrong confirmation and a non-teacher actor', async () => {
     await expectStatus(resetClassData(teacher, 'reset'), 400);
-    await expectStatus(resetClassData(group, 'RESET'), 403);
+    await expectStatus(resetClassData(student, 'RESET'), 403);
   });
 });

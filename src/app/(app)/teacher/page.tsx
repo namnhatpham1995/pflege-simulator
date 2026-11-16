@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ExpectedFieldsEditor, ResetClassDataButton } from '@/components/expected-fields-editor';
-import { HttpError } from '@/lib/api-error';
+import { ResetClassDataButton } from '@/components/reset-class-data-button';
+import { formatDe } from '@/lib/date';
 import { requireActor } from '@/server/auth/session';
-import { getRequirementPolicy } from '@/server/services/requirements';
-import { listAuthorisedPatients } from '@/server/services/patients';
+import { listPatients } from '@/server/services/patients';
 import type { Actor } from '@/lib/types';
 
 export const metadata = {
   title: 'Lehrkraft-Konsole – Pflegedokumentation',
 };
 
-export default async function TeacherPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ patient?: string }>;
-}) {
+export const dynamic = 'force-dynamic';
+
+export default async function TeacherPage() {
   let actor: Actor | null = null;
   try {
     actor = await requireActor();
@@ -25,19 +22,16 @@ export default async function TeacherPage({
   if (!actor) redirect('/login');
   if (actor.type !== 'teacher') notFound();
 
-  const patients = await listAuthorisedPatients(actor);
-  const { patient: requestedPatient } = await searchParams;
-  const selectedId = requestedPatient ?? patients[0]?.id ?? null;
-  const requirements = selectedId ? await getRequirementPolicy(selectedId) : null;
-  const selectedPatient = patients.find((patient) => patient.id === selectedId) ?? null;
+  const patients = await listPatients();
 
   return (
     <section className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-ink">Lehrkraft-Konsole</h1>
         <p className="text-sm text-ink-muted">
-          Lesender Zugriff auf alle fiktiven Patienten. Die Lehrkraft kann keine Einträge ändern,
-          aber festlegen, welche Messwerte pro Patient erwartet werden.
+          Lesender Zugriff auf alle fiktiven Patienten. Die Lehrkraft kann Messwerte und
+          Pflegeberichte weder anlegen noch ändern; Namen und Geburtsdaten lassen sich im
+          Patientenbereich bearbeiten.
         </p>
       </div>
 
@@ -48,12 +42,14 @@ export default async function TeacherPage({
             className="rounded-lg border border-line bg-surface p-3 shadow-panel"
           >
             <p className="text-sm font-medium text-ink">{patient.displayName}</p>
+            <p className="text-xs text-ink-muted">
+              {patient.dateOfBirth
+                ? `Geburtsdatum: ${formatDe(patient.dateOfBirth)}`
+                : 'Geburtsdatum nicht angegeben'}
+            </p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs">
-              <Link
-                href={`/patients/${patient.id}/vitalwerte`}
-                className="text-accent hover:underline"
-              >
-                Vitalwerte ansehen
+              <Link href={`/patients/${patient.id}/dashboard`} className="text-accent hover:underline">
+                Dashboard ansehen
               </Link>
               <Link
                 href={`/patients/${patient.id}/pflegebericht`}
@@ -61,35 +57,16 @@ export default async function TeacherPage({
               >
                 Pflegeberichte ansehen
               </Link>
-              <Link href={`/teacher?patient=${patient.id}`} className="text-ink-muted hover:underline">
-                Erwartungen
-              </Link>
             </div>
           </div>
         ))}
       </div>
 
-      {selectedPatient && requirements ? (
-        <div className="rounded-lg border border-line bg-surface p-4 shadow-panel">
-          <h2 className="text-lg font-semibold text-ink">
-            Erwartete Messwerte – {selectedPatient.displayName}
-          </h2>
-          <p className="mb-3 text-sm text-ink-muted">
-            Ist ein Feld erwartet, wird ein leerer Wert rot markiert und im Hinweis genannt.
-            Gewicht und Größe sind standardmäßig optional.
-          </p>
-          <ExpectedFieldsEditor
-            patientId={selectedPatient.id}
-            initialRequirements={requirements}
-          />
-        </div>
-      ) : null}
-
       <div className="rounded-lg border border-danger bg-surface p-4 shadow-panel">
         <h2 className="text-sm font-semibold text-ink">Klassendaten zurücksetzen</h2>
         <p className="mb-2 text-xs text-ink-muted">
-          Löscht Vitalwerte, Pflegeberichte, frühere Fassungen und das Protokoll. Patienten,
-          Gruppen, Zugangscodes und Erwartungen bleiben erhalten. Am Semesterende gedacht.
+          Löscht Messwerte, Pflegeberichte, frühere Fassungen und das Protokoll. Patienten mit
+          ihren Namen und Geburtsdaten bleiben erhalten. Am Semesterende gedacht.
         </p>
         <ResetClassDataButton />
       </div>

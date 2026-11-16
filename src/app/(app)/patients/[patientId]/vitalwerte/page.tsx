@@ -1,11 +1,8 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
+import { VitalwertePanel } from '@/components/vitalwerte-panel';
 import { HttpError } from '@/lib/api-error';
-import { addDays, isValidCalendarDate, todayInBerlin } from '@/lib/date';
 import { requirePatientAccess } from '@/server/services/access';
-import { getVitalsRange } from '@/server/services/vitals';
-import { WINDOW_AFTER, WINDOW_BEFORE } from '@/lib/chart-segments';
-import { VitalViewProvider } from '@/state/vital-view';
-import { VitalWorkspace } from './vital-workspace';
+import { listRecentEntries } from '@/server/services/vitals';
 
 export const metadata = {
   title: 'Vitalwerte – Pflegedokumentation',
@@ -13,38 +10,36 @@ export const metadata = {
 
 export default async function VitalwertePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ patientId: string }>;
-  searchParams: Promise<{ date?: string }>;
 }) {
   const { patientId } = await params;
 
+  let access;
   try {
-    await requirePatientAccess(patientId);
+    access = await requirePatientAccess(patientId);
   } catch (error) {
-    if (error instanceof HttpError && error.status === 401) redirect('/login');
-    if (error instanceof HttpError && (error.status === 403 || error.status === 404)) notFound();
+    if (error instanceof HttpError && error.status === 404) notFound();
     throw error;
   }
 
-  const { date } = await searchParams;
-  const selectedDate = date && isValidCalendarDate(date) ? date : todayInBerlin();
-
-  const { records, requirements } = await getVitalsRange(
-    patientId,
-    addDays(selectedDate, -WINDOW_BEFORE),
-    addDays(selectedDate, WINDOW_AFTER),
-  );
+  const recent = await listRecentEntries(patientId);
 
   return (
-    <VitalViewProvider
-      patientId={patientId}
-      initialDate={selectedDate}
-      initialRecords={records}
-      initialRequirements={requirements}
-    >
-      <VitalWorkspace />
-    </VitalViewProvider>
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-ink">Vitalwerte</h2>
+        <p className="text-sm text-ink-muted">
+          Eine Kategorie wählen, Wert, Tag und Uhrzeit eintragen und ausdrücklich speichern.
+          Gespeicherte Einträge lassen sich löschen, nicht bearbeiten.
+        </p>
+      </div>
+
+      <VitalwertePanel
+        patientId={patientId}
+        recent={recent}
+        canWrite={access.actor.type === 'group'}
+      />
+    </section>
   );
 }

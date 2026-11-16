@@ -11,7 +11,8 @@ im Jahr mehrdeutig bzw. nicht existent; die Schichtübergabe meint aber genau �
 Sortiert wird lexikografisch über beide Spalten, was für dieses Format chronologisch korrekt
 ist und keine Zeitzonenumrechnung braucht.
 
-`Vitalwerte` kennt dagegen **keine** Schicht.
+`Vitalwerte` speichert dagegen nur Datum und Uhrzeit je Messwert, ohne Schicht und ohne
+Tagesdatensatz.
 
 ## Anlegen
 
@@ -24,8 +25,8 @@ Content-Type: application/json
 ```
 
 Antwort `201 { report }`. Der Text wird getrimmt und muss 1–10.000 Zeichen lang sein; ein
-unbekannter Schichtwert oder ein ungültiges Datum ist `400 VALIDATION`. Nur die zugeordnete
-Gruppe darf schreiben (Lehrkraft: `403`).
+unbekannter Schichtwert oder ein ungültiges Datum ist `400 VALIDATION`. Jeder Besucher ohne
+Lehrkraft-Sitzung darf schreiben; die Lehrkraft erhält `403`.
 
 ## Lesen
 

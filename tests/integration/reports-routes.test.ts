@@ -67,17 +67,18 @@ afterAll(async () => {
 const groupCookie = () => ({ cookie: `pflege_session=${groupToken}` });
 
 describe('reports routes', () => {
-  it('answers 401 without a session', async () => {
+  it('serves the report list to an anonymous visitor', async () => {
     const response = await listRoute(new Request(`${ORIGIN}/api/patients/p-1/reports`), params('p-1'));
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
   });
 
-  it('answers 403 for a foreign patient', async () => {
+  it('serves a foreign patient to any visitor', async () => {
     const response = await listRoute(
-      new Request(`${ORIGIN}/api/patients/p-2/reports`, { headers: groupCookie() }),
+      new Request(`${ORIGIN}/api/patients/p-2/reports`),
       params('p-2'),
     );
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect((await response.json()).reports).toEqual([]);
   });
 
   it('creates a report with 201', async () => {

@@ -1,11 +1,15 @@
 # Vitalwerte – API
 
-Ein Datensatz pro Patient und Kalendertag, acht nullbare Zahlenfelder, keine Schicht.
-Alle Routen prüfen die Sitzung und die Patientenzuordnung über `requirePatientAccess`.
+Jeder Messwert ist ein eigener Eintrag mit Art, Wert, Datum und Uhrzeit. Beliebig viele
+Einträge derselben Art am selben Tag – auch zur selben Minute – sind erlaubt. Es gibt keine
+Version und keinen Konfliktpfad: Speichern legt an, Löschen entfernt.
 
-## Felder und Grenzen
+Alle Routen prüfen über `requirePatientAccess`, dass der Patient existiert. Lesen und
+Schreiben sind ohne Anmeldung möglich; die Lehrkraft darf nur lesen.
 
-| Feld | Einheit | Typ | Bereich |
+## Arten und Grenzen
+
+| Art | Einheit | Typ | Bereich |
 |---|---|---|---|
 | `systolic` | mmHg | Ganzzahl | 50–300 |
 | `diastolic` | mmHg | Ganzzahl | 30–200 |
@@ -16,97 +20,99 @@ Alle Routen prüfen die Sitzung und die Patientenzuordnung über `requirePatient
 | `pain` | 0–10 | Ganzzahl | 0–10 |
 | `glucose` | mg/dL | Ganzzahl | 10–900 |
 
-Zusätzlich gilt: Sind beide Blutdruckwerte gesetzt, muss `diastolic < systolic` sein. Die
-Prüfung läuft auf dem **zusammengeführten** Datensatz, nicht auf dem Patch.
+Kategorien der Oberfläche: `blutdruck` (systolic + diastolic), `puls`, `temperatur`,
+`gewicht`, `groesse`, `schmerzen`, `blutzucker`. Ein Blutdruck-Speichern enthält beide Werte
+und wird atomar geschrieben; `diastolic < systolic` gilt nur innerhalb dieses einen Paares.
+Einträge zu verschiedenen Zeiten werden nie miteinander verglichen.
 
 ## Bereiche lesen
 
 ```http
-GET /api/patients/{patientId}/vitals?from=2026-11-10&to=2026-11-23
+GET /api/patients/{patientId}/vitals?from=2026-11-01&to=2026-11-14
 ```
 
 ```json
 {
-  "records": [
+  "entries": [
     {
       "id": "c1f0…",
       "patientId": "…",
-      "date": "2026-11-10",
-      "systolicMmhg": 120,
-      "diastolicMmhg": 80,
-      "pulseBpm": 72,
-      "temperatureC": null,
-      "weightKg": null,
-      "heightCm": null,
-      "painScore": 0,
-      "glucoseMgDl": null,
-      "version": 1,
-      "createdAt": "2026-11-10T08:00:00.000Z",
-      "updatedAt": "2026-11-10T08:00:00.000Z"
+      "kind": "pulse",
+      "value": 72,
+      "observedDate": "2026-11-12",
+      "observedTime": "09:15",
+      "submissionId": "0b7e…",
+      "createdAt": "2026-11-12T08:15:00.000Z"
     }
-  ],
-  "requirements": { "systolic": true, "diastolic": true, "pulse": true, "temperature": false,
-                    "weight": false, "height": false, "pain": false, "glucose": false }
+  ]
 }
 ```
 
-Der Zeitraum umfasst höchstens 31 Tage; `from` nach `to` und ungültige Daten sind `400`.
-
-## Einen Tag lesen
-
-```http
-GET /api/patients/{patientId}/vitals/2026-11-10
-```
-
-```json
-{ "record": null, "version": 0 }
-```
-
-Ein leerer Tag erzeugt **keinen** Datensatz; `version: 0` ist die Einladung, ihn anzulegen.
+Der Zeitraum ist inklusiv und auf 31 Tage begrenzt. Sortiert wird nach Datum, Uhrzeit und
+Erstellzeit; gleiche Zeiten behalten ihre Erstellreihenfolge. `from` nach `to`, ein ungültiges
+Datum oder ein zu langer Zeitraum sind `400 VALIDATION`. Ein Tag ohne Einträge liefert
+`{ "entries": [] }` – keine Nullzeile.
 
 ## Speichern
 
 ```http
-PATCH /api/patients/{patientId}/vitals/2026-11-10
+POST /api/patients/{patientId}/vitals
 Origin: http://localhost:3000
 Content-Type: application/json
 
-{ "version": 0, "values": { "systolic": 120, "diastolic": 80, "pulse": "72", "temperature": "36,8" } }
+{
+  "category": "blutdruck",
+  "values": { "systolic": "120", "diastolic": "80" },
+  "date": "2026-11-12",
+  "time": "08:00"
+}
 ```
 
-Antwort `200`:
+Antwort `201`:
 
 ```json
-{ "record": { "…": "…", "version": 1 }, "version": 1 }
+{
+  "entries": [ { "kind": "systolic", "value": 120, "…": "…" },
+               { "kind": "diastolic", "value": 80, "…": "…" } ],
+  "groups": [ { "submissionId": "…", "category": "blutdruck",
+                "observedDate": "2026-11-12", "observedTime": "08:00",
+                "values": { "systolic": 120, "diastolic": 80 }, "createdAt": "…" } ]
+}
 ```
 
 Regeln:
 
-- `version: 0` legt den Tag an. Existiert er bereits, antwortet die Route `409`.
-- `version` muss der zuletzt gelesenen Version entsprechen, sonst `409` mit `current`.
-- Weggelassene Felder bleiben unverändert, `null` löscht einen Wert.
-- `""` wird wie `null` behandelt, Komma-Dezimalen (`"36,8"`) werden akzeptiert.
-- Unbekannte Schlüssel – etwa `shift` – sind `400 VALIDATION`.
-- `pain: 0` ist ein gültiger Wert und wird nicht als fehlend behandelt.
+- `values` ist strikt: nur die Felder der gewählten Kategorie, alle mit Wert.
+- `"36,8"` wird als Dezimalzahl gelesen; `""` ist ein fehlender Wert und wird abgelehnt.
+- Unbekannte Schlüssel – etwa `shift` – sind `400 VALIDATION`; ebenso `24:00`, `12:60` und
+  unmögliche Kalenderdaten wie `2027-02-29`.
+- `pain: 0` ist ein gültiger Eintrag und kein leerer Platzhalter.
+- Bei einer ungültigen Blutdruck-Hälfte wird keine der beiden Zeilen geschrieben.
+- `date` und `time` werden unverändert als Wandzeit gespeichert; eine durch die Zeitumstellung
+  übersprungene Uhrzeit wie `02:30` am 27.03.2027 bleibt gültig.
 
-### Konflikt
+## Löschen
 
-```json
-{
-  "error": { "code": "CONFLICT", "message": "Der Tag wurde zwischenzeitlich geändert." },
-  "current": { "record": { "…": "…", "version": 3 }, "version": 3 }
-}
+```http
+DELETE /api/patients/{patientId}/vitals/{submissionId}
+Origin: http://localhost:3000
 ```
 
-Die Oberfläche zeigt daraus den aktuellen Stand und bietet an, die eigenen Werte darauf
-anzuwenden; nichts wird still überschrieben.
+Ein Blutdruck-Paar wird als Einheit gelöscht. Antwort `200 { "deleted": 2 }`; ein bereits
+gelöschter Eintrag ist `404 NOT_FOUND`. Die Lehrkraft erhält `403 FORBIDDEN`.
+
+## Audit
+
+Jedes akzeptierte Speichern und Löschen schreibt genau eine `audit_log`-Zeile mit Akteur,
+Patient, Aktion, Art, Wert, Datum und Uhrzeit. Der anonyme Akteur erscheint als
+`actor_type = 'group'`, `actor_id = 'patient:<patientId>'`. Lesen schreibt nichts.
 
 ## Fehler
 
 | Status | Code | Ursache |
 |---|---|---|
-| 400 | `VALIDATION` | ungültiges Datum, ungültiger Körper, Bereichsverstoß, `diastolic >= systolic` |
-| 401 | `UNAUTHENTICATED` | keine Sitzung |
-| 403 | `FORBIDDEN` | fremder Patient oder Lehrkraft beim Schreiben |
-| 403 | `ORIGIN` | fehlender/fremder `Origin` bei `PATCH` |
-| 409 | `CONFLICT` | veraltete Version oder bereits vorhandener Tag |
+| 400 | `VALIDATION` | ungültiges Datum/Zeit, ungültiger Körper, Bereichsverstoß, Paarregel |
+| 401 | — | nur Lehrkraft-Routen; die Messwert-Routen sind offen |
+| 403 | `FORBIDDEN` | Lehrkraft beim Schreiben oder Löschen |
+| 403 | `ORIGIN` | fehlender/fremder `Origin` bei `POST`/`DELETE` |
+| 404 | `NOT_FOUND` | unbekannter Patient oder bereits gelöschter Eintrag |

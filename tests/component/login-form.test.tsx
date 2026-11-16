@@ -18,35 +18,27 @@ beforeEach(() => {
 });
 
 describe('LoginForm', () => {
-  it('renders the group mode with a required access-code field', () => {
+  it('offers one password field and no access-code mode', () => {
     render(<LoginForm />);
-    const input = screen.getByLabelText(/Zugangscode der Gruppe/);
-    expect(input).toBeRequired();
+    expect(screen.getByLabelText(/Passwort der Lehrkraft/)).toHaveAttribute('type', 'password');
+    expect(screen.queryByLabelText(/Zugangscode/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled();
   });
 
-  it('switches to teacher mode and shows a password field', async () => {
-    const user = userEvent.setup();
-    render(<LoginForm />);
-    await user.click(screen.getByRole('tab', { name: 'Lehrkraft' }));
-    expect(screen.getByLabelText(/Passwort der Lehrkraft/)).toHaveAttribute('type', 'password');
-  });
-
-  it('shows the server message for a refused login', async () => {
+  it('shows one generic message for a refused login', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({ error: { message: 'Zugangscode oder Passwort ist falsch.' } }),
+      json: async () => ({ error: { message: 'Das Passwort ist falsch.' } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const user = userEvent.setup();
     render(<LoginForm />);
-    await user.type(screen.getByLabelText(/Zugangscode der Gruppe/), 'ABCD');
+    await user.type(screen.getByLabelText(/Passwort der Lehrkraft/), 'falsch');
     await user.click(screen.getByRole('button', { name: 'Anmelden' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Zugangscode oder Passwort ist falsch.',
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Das Passwort ist falsch.');
     expect(replace).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/login',
@@ -55,12 +47,11 @@ describe('LoginForm', () => {
   });
 
   it('disables the submit button while the request is pending', async () => {
-    const fetchMock = vi.fn().mockReturnValue(new Promise(() => undefined));
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => undefined)));
 
     const user = userEvent.setup();
     render(<LoginForm />);
-    await user.type(screen.getByLabelText(/Zugangscode der Gruppe/), 'ABCD');
+    await user.type(screen.getByLabelText(/Passwort der Lehrkraft/), 'geheim');
     await user.click(screen.getByRole('button', { name: 'Anmelden' }));
 
     await waitFor(() => {
@@ -68,17 +59,17 @@ describe('LoginForm', () => {
     });
   });
 
-  it('navigates to the patient list after a successful login', async () => {
+  it('opens the teacher console after a successful login', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ actor: { type: 'group' } }) }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ actor: { type: 'teacher' } }) }),
     );
 
     const user = userEvent.setup();
     render(<LoginForm />);
-    await user.type(screen.getByLabelText(/Zugangscode der Gruppe/), 'ABCD');
+    await user.type(screen.getByLabelText(/Passwort der Lehrkraft/), 'geheim');
     await user.click(screen.getByRole('button', { name: 'Anmelden' }));
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/patients'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/teacher'));
   });
 });

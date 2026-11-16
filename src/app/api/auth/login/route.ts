@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { parseJsonBody, toErrorResponse } from '@/lib/api-error';
 import { SESSION_COOKIE_NAME } from '@/lib/types';
-import { loginAsTeacher, loginWithGroupCode } from '@/server/auth/login';
+import { loginAsTeacher } from '@/server/auth/login';
 import {
   destroySession,
   readCookieValue,
@@ -10,10 +10,9 @@ import {
 } from '@/server/auth/session';
 import { assertSameOrigin } from '@/server/services/access';
 
-const loginBodySchema = z.discriminatedUnion('mode', [
-  z.strictObject({ mode: z.literal('group'), code: z.string().min(1) }),
-  z.strictObject({ mode: z.literal('teacher'), password: z.string().min(1) }),
-]);
+const loginBodySchema = z.strictObject({
+  password: z.string({ required_error: 'Bitte das Passwort eingeben.' }).min(1),
+});
 
 function clientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -25,12 +24,8 @@ export async function POST(request: Request): Promise<Response> {
   try {
     assertSameOrigin(request);
     const body = await parseJsonBody(request, loginBodySchema);
-    const context = { ip: clientIp(request) };
 
-    const result =
-      body.mode === 'group'
-        ? await loginWithGroupCode(body.code, context)
-        : await loginAsTeacher(body.password, context);
+    const result = await loginAsTeacher(body.password, { ip: clientIp(request) });
 
     // Session fixation: an existing cookie is revoked before issuing the new one.
     const existingToken = readCookieValue(request.headers.get('cookie'), SESSION_COOKIE_NAME);

@@ -5,18 +5,19 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/cn';
 
 const SECTIONS = [
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'vitalwerte', label: 'Vitalwerte' },
   { key: 'pflegebericht', label: 'Pflegebericht' },
 ] as const;
 
 export function SectionTabs({ patientId }: { patientId: string }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
 
   return (
     <nav aria-label="Bereiche" className="flex gap-1 border-b border-line">
       {SECTIONS.map((section) => {
         const href = `/patients/${patientId}/${section.key}`;
-        const isActive = pathname?.startsWith(href) ?? false;
+        const isActive = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={section.key}

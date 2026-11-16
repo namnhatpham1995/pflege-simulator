@@ -1,60 +1,63 @@
 import {
-  VITAL_FIELDS,
-  VITAL_FIELD_COLUMNS,
+  MEASUREMENT_CATEGORIES,
+  categoryForKind,
+  type EntryGroup,
+  type MeasurementCategory,
+  type RecentEntries,
+  type VitalEntry,
   type VitalField,
-  type VitalRecord,
 } from '@/lib/types';
-import type { VitalsValuesPatch } from '@/lib/validation/vitals';
+import { VITAL_RULES } from '@/lib/validation/vitals';
 
-export type VitalValues = Record<VitalField, number | null>;
+export const RECENT_ENTRIES_LIMIT = 50;
 
-export function emptyValues(): VitalValues {
-  return Object.fromEntries(VITAL_FIELDS.map((field) => [field, null])) as VitalValues;
+export function formatVitalValue(kind: VitalField, value: number): string {
+  if (VITAL_RULES[kind].kind === 'integer') return String(value);
+  return String(value).replace('.', ',');
 }
 
-export function valuesFromRecord(record: VitalRecord): VitalValues {
-  return Object.fromEntries(
-    VITAL_FIELDS.map((field) => [field, record[VITAL_FIELD_COLUMNS[field]] ?? null]),
-  ) as VitalValues;
-}
-
-/** Omitted key = unchanged, explicit null = cleared. */
-export function mergeValues(current: VitalValues, patch: VitalsValuesPatch): VitalValues {
-  const merged = { ...current };
-  for (const field of VITAL_FIELDS) {
-    if (!(field in patch)) continue;
-    const value = patch[field];
-    if (value === undefined) continue;
-    merged[field] = value;
-  }
-  return merged;
-}
-
-export interface FieldChange {
-  field: VitalField;
-  from: number | null;
-  to: number | null;
-}
-
-export function changedFields(before: VitalValues, after: VitalValues): FieldChange[] {
-  const changes: FieldChange[] = [];
-  for (const field of VITAL_FIELDS) {
-    if (before[field] !== after[field]) {
-      changes.push({ field, from: before[field], to: after[field] });
+/** The two rows of one blood-pressure save become one list line. */
+export function groupEntries(entries: VitalEntry[]): EntryGroup[] {
+  const groups = new Map<string, EntryGroup>();
+  for (const entry of entries) {
+    const existing = groups.get(entry.submissionId);
+    if (existing) {
+      existing.values[entry.kind] = entry.value;
+      continue;
     }
+    groups.set(entry.submissionId, {
+      submissionId: entry.submissionId,
+      category: categoryForKind(entry.kind),
+      observedDate: entry.observedDate,
+      observedTime: entry.observedTime,
+      values: { [entry.kind]: entry.value },
+      createdAt: entry.createdAt,
+    });
   }
-  return changes;
+  return [...groups.values()];
 }
 
-export function columnsFromValues(values: VitalValues) {
-  return {
-    systolicMmhg: values.systolic,
-    diastolicMmhg: values.diastolic,
-    pulseBpm: values.pulse,
-    temperatureC: values.temperature,
-    weightKg: values.weight,
-    heightCm: values.height,
-    painScore: values.pain,
-    glucoseMgDl: values.glucose,
-  };
+export function emptyRecentEntries(): RecentEntries {
+  return Object.fromEntries(
+    MEASUREMENT_CATEGORIES.map((category) => [category.key, [] as EntryGroup[]]),
+  ) as RecentEntries;
+}
+
+export function recentByCategory(groups: EntryGroup[]): RecentEntries {
+  const result = emptyRecentEntries();
+  for (const category of MEASUREMENT_CATEGORIES) {
+    result[category.key] = groups
+      .filter((group) => group.category === category.key)
+      .sort((a, b) => {
+        if (a.observedDate !== b.observedDate) return a.observedDate < b.observedDate ? 1 : -1;
+        if (a.observedTime !== b.observedTime) return a.observedTime < b.observedTime ? 1 : -1;
+        return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+      })
+      .slice(0, RECENT_ENTRIES_LIMIT);
+  }
+  return result;
+}
+
+export function entriesForCategory(groups: EntryGroup[], category: MeasurementCategory): EntryGroup[] {
+  return groups.filter((group) => group.category === category);
 }

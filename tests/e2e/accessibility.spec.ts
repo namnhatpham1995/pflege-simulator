@@ -1,26 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { loginAsGroup, openPatient, vitalwerteUrl } from './helpers';
+import { dashboardUrl, openPatient, vitalwerteUrl } from './helpers';
 
-test('the workspace is labelled, focusable and does not rely on colour alone', async ({ page }) => {
-  await loginAsGroup(page);
-  const patientId = await openPatient(page);
-  await page.goto(vitalwerteUrl(patientId, '2028-03-10'));
+test('the workspace is labelled, keyboard reachable and free of missing-value signalling', async ({
+  page,
+}) => {
+  const patientId = await openPatient(page, 7);
 
-  await expect(page.getByRole('group', { name: 'Ausgewähltes Datum' })).toBeVisible();
-  await expect(page.getByLabel('Tag', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Monat', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Jahr', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Bereiche' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByText('Fehlt')).toHaveCount(0);
+  // The Dashboard has date navigation but no data-entry, save or delete control.
+  await expect(page.locator('#entry-pulse')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Speichern|Löschen/ })).toHaveCount(0);
 
-  await expect(page.getByTestId('missing-warning')).toHaveAttribute('aria-live', 'polite');
-
-  // Non-colour indicator: the cell carries the word "Fehlt" plus an accessible name.
-  const missingCell = page.getByTestId('cell-2028-03-10-systolic');
-  await expect(missingCell.getByRole('button')).toHaveText('Fehlt');
-  await expect(missingCell.getByRole('button')).toHaveAccessibleName(/fehlt/);
-
-  await expect(page.locator('table caption')).toHaveClass(/sr-only/);
-
-  // Every interactive control exposes a name; no icon-only button is unnamed.
   const unnamed = await page.evaluate(() => {
     const elements = Array.from(
       document.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea'),
@@ -38,12 +30,22 @@ test('the workspace is labelled, focusable and does not rely on colour alone', a
   });
   expect(unnamed).toEqual([]);
 
-  // Keyboard order starts at the day input and moves through month, year and calendar.
-  await page.getByLabel('Tag', { exact: true }).focus();
+  await page.goto(vitalwerteUrl(patientId));
+  await expect(page.getByRole('tablist', { name: 'Messkategorien' })).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(7);
+  await expect(page.getByRole('group', { name: 'Tag' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Tag', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Monat', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Jahr', exact: true })).toBeVisible();
+  await expect(page.getByLabel(/Uhrzeit/)).toBeVisible();
+
+  await page.getByRole('textbox', { name: 'Tag', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(page.getByLabel('Monat', { exact: true })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'Monat', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByLabel('Jahr', { exact: true })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Kalender öffnen' })).toBeFocused();
+  await expect(page.getByRole('textbox', { name: 'Jahr', exact: true })).toBeFocused();
+
+  await page.goto(dashboardUrl(patientId, 'week'));
+  await expect(page.getByTestId('dashboard-label')).toContainText('–');
+  await expect(page.getByText('Fehlt')).toHaveCount(0);
 });

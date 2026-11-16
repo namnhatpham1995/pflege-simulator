@@ -1,20 +1,22 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { auditLog, patients, studentGroups } from '@/db/schema';
+import { auditLog, patients, vitalEntries } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
 import type { Actor } from '@/lib/types';
+import { anonymousActor } from '@/server/services/access';
 import {
-  getVitalsDay,
-  getVitalsRange,
-  saveVitalsDay,
+  createEntries,
+  deleteEntries,
+  getEntriesRange,
+  listRecentEntries,
 } from '@/server/services/vitals';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
 
-const groupA: Actor = { type: 'group', id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1' };
-const groupB: Actor = { type: 'group', id: 'g-2', displayName: 'Gruppe 2', patientId: 'p-2' };
+const student = anonymousActor('p-1');
 const teacher: Actor = { type: 'teacher', id: 'teacher', displayName: 'Lehrkraft' };
 
 async function auditCount(): Promise<number> {
@@ -33,21 +35,28 @@ async function expectStatus(promise: Promise<unknown>, status: number) {
   }
 }
 
+function input(
+  category: string,
+  values: Record<string, string | number>,
+  date = '2026-11-12',
+  time = '09:15',
+) {
+  return { category, values, date, time };
+}
+
 beforeAll(async () => {
   db = await appDatabase();
   const now = new Date().toISOString();
   await db.insert(patients).values([
     { id: 'p-1', displayName: 'Frau Albrecht', createdAt: now },
     { id: 'p-2', displayName: 'Herr Brandt', createdAt: now },
-  ]);
-  await db.insert(studentGroups).values([
-    { id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1', accessCodeHash: 'scrypt$1$1$1$00$00', isActive: 1 },
-    { id: 'g-2', displayName: 'Gruppe 2', patientId: 'p-2', accessCodeHash: 'scrypt$1$1$1$00$00', isActive: 1 },
+    { id: 'p-3', displayName: 'Frau Czerwenka', createdAt: now },
   ]);
 });
 
 beforeEach(async () => {
   await db.delete(auditLog);
+  await db.delete(vitalEntries);
 });
 
 afterAll(async () => {
@@ -55,140 +64,198 @@ afterAll(async () => {
   await closeDatabase();
 });
 
-describe('saveVitalsDay', () => {
-  it('creates a day on version 0 and writes one audit row', async () => {
-    const saved = await saveVitalsDay(groupA, 'p-1', '2026-11-10', {
-      version: 0,
-      values: { systolic: 120, diastolic: 80, pulse: 72, pain: 0 },
+describe('createEntries', () => {
+  it('stores a single value and writes one audit row', async () => {
+    const created = await createEntries(student, 'p-1', input('puls', { pulse: 82 }));
+    expect(created.entries).toHaveLength(1);
+    expect(created.entries[0]).toMatchObject({
+      patientId: 'p-1',
+      kind: 'pulse',
+      value: 82,
+      observedDate: '2026-11-12',
+      observedTime: '09:15',
     });
-
-    expect(saved.version).toBe(1);
-    expect(saved.record.date).toBe('2026-11-10');
-    expect(saved.record.systolicMmhg).toBe(120);
-    expect(saved.record.painScore).toBe(0);
+    expect(created.groups[0]?.values).toEqual({ pulse: 82 });
     expect(await auditCount()).toBe(1);
 
     const rows = await db.select().from(auditLog);
     expect(rows[0]?.action).toBe('create');
-    expect(JSON.parse(rows[0]!.changes).map((change: { field: string }) => change.field)).toContain('systolic');
+    expect(rows[0]?.actorId).toBe('patient:p-1');
+    expect(rows[0]?.changes).toContain('"field":"pulse"');
+    expect(rows[0]?.changes).toContain('"to":82');
   });
 
-  it('keeps pain 0 distinguishable from empty after a reload', async () => {
-    await saveVitalsDay(groupA, 'p-1', '2026-11-11', { version: 0, values: { pain: 0 } });
-    const record = await getVitalsDay('p-1', '2026-11-11');
-    expect(record?.painScore).toBe(0);
+  it('stores pain 0 as a recorded value', async () => {
+    const created = await createEntries(student, 'p-1', input('schmerzen', { pain: 0 }));
+    expect(created.entries[0]?.value).toBe(0);
+    const recent = await listRecentEntries('p-1');
+    expect(recent.schmerzen[0]?.values).toEqual({ pain: 0 });
   });
 
-  it('merges omitted keys and clears an explicit null', async () => {
-    const created = await saveVitalsDay(groupA, 'p-1', '2026-11-12', {
-      version: 0,
-      values: { systolic: 130, diastolic: 85, pulse: 70, temperature: 37.1 },
-    });
-
-    const updated = await saveVitalsDay(groupA, 'p-1', '2026-11-12', {
-      version: created.version,
-      values: { temperature: null, pulse: 74 },
-    });
-
-    expect(updated.version).toBe(2);
-    expect(updated.record.temperatureC).toBeNull();
-    expect(updated.record.pulseBpm).toBe(74);
-    expect(updated.record.systolicMmhg).toBe(130);
-    expect(updated.record.diastolicMmhg).toBe(85);
-  });
-
-  it('validates the cross-field rule against stored values, not the patch', async () => {
-    await saveVitalsDay(groupA, 'p-1', '2026-11-13', {
-      version: 0,
-      values: { systolic: 120 },
-    });
-    await expectStatus(
-      saveVitalsDay(groupA, 'p-1', '2026-11-13', { version: 1, values: { diastolic: 130 } }),
-      400,
+  it('stores a blood pressure pair with one submission and one audit row', async () => {
+    const created = await createEntries(
+      student,
+      'p-1',
+      input('blutdruck', { systolic: 120, diastolic: 80 }, '2026-11-13', '08:00'),
     );
+
+    expect(created.entries).toHaveLength(2);
+    const [systolic, diastolic] = created.entries;
+    expect(systolic?.kind).toBe('systolic');
+    expect(diastolic?.kind).toBe('diastolic');
+    expect(systolic?.submissionId).toBe(diastolic?.submissionId);
+    expect(systolic?.observedTime).toBe('08:00');
+    expect(await auditCount()).toBe(1);
+    expect(created.groups[0]?.values).toEqual({ systolic: 120, diastolic: 80 });
   });
 
-  it('refuses a stale version with the current record and writes no audit row', async () => {
-    await saveVitalsDay(groupA, 'p-1', '2026-11-14', { version: 0, values: { pulse: 60 } });
-    const before = await auditCount();
+  it('accepts two entries at the same minute', async () => {
+    await createEntries(student, 'p-1', input('puls', { pulse: 80 }));
+    await createEntries(student, 'p-1', input('puls', { pulse: 84 }));
 
-    const error = await expectStatus(
-      saveVitalsDay(groupA, 'p-1', '2026-11-14', { version: 0, values: { pulse: 61 } }),
-      409,
-    );
-    const current = error.extra?.current as { record: { pulseBpm: number }; version: number };
-    expect(current.record.pulseBpm).toBe(60);
-    expect(current.version).toBe(1);
-    expect(await auditCount()).toBe(before);
+    const rows = await db.select().from(vitalEntries);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.submissionId)).size).toBe(2);
   });
 
-  it('lets exactly one of two concurrent first inserts win', async () => {
-    const results = await Promise.allSettled([
-      saveVitalsDay(groupA, 'p-1', '2026-11-15', { version: 0, values: { pulse: 65 } }),
-      saveVitalsDay(groupA, 'p-1', '2026-11-15', { version: 0, values: { pulse: 66 } }),
+  it('lets two concurrent saves both succeed', async () => {
+    const results = await Promise.all([
+      createEntries(student, 'p-1', input('puls', { pulse: 70 })),
+      createEntries(student, 'p-1', input('puls', { pulse: 72 })),
     ]);
-    const fulfilled = results.filter((result) => result.status === 'fulfilled');
-    const rejected = results.filter((result) => result.status === 'rejected');
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    expect(((rejected[0] as PromiseRejectedResult).reason as HttpError).status).toBe(409);
+    expect(results.every((result) => result.entries.length === 1)).toBe(true);
+    expect(await db.select().from(vitalEntries)).toHaveLength(2);
   });
 
-  it('keeps a cleared record rather than deleting the day', async () => {
-    const created = await saveVitalsDay(groupA, 'p-1', '2026-11-16', {
-      version: 0,
-      values: { pain: 4 },
-    });
-    const cleared = await saveVitalsDay(groupA, 'p-1', '2026-11-16', {
-      version: created.version,
-      values: { pain: null },
-    });
-    expect(cleared.record.painScore).toBeNull();
-    expect(cleared.version).toBe(2);
-    expect(await getVitalsDay('p-1', '2026-11-16')).not.toBeNull();
-  });
-
-  it('refuses writes from another group and from the teacher', async () => {
+  it('writes neither blood-pressure row when one value is invalid', async () => {
     await expectStatus(
-      saveVitalsDay(groupB, 'p-1', '2026-11-17', { version: 0, values: { pulse: 70 } }),
-      403,
-    );
-    await expectStatus(
-      saveVitalsDay(teacher, 'p-1', '2026-11-17', { version: 0, values: { pulse: 70 } }),
-      403,
-    );
-  });
-
-  it('rejects an invalid date and an invalid body', async () => {
-    await expectStatus(
-      saveVitalsDay(groupA, 'p-1', '2027-02-29', { version: 0, values: {} }),
+      createEntries(student, 'p-1', input('blutdruck', { systolic: 120, diastolic: 900 })),
       400,
     );
+    expect(await db.select().from(vitalEntries)).toHaveLength(0);
+    expect(await auditCount()).toBe(0);
+  });
+
+  it('refuses a missing pair value, an unknown field and a shift', async () => {
+    await expectStatus(createEntries(student, 'p-1', input('blutdruck', { systolic: 120 })), 400);
+    await expectStatus(createEntries(student, 'p-1', input('puls', { pulse: 70, spo2: 98 })), 400);
     await expectStatus(
-      saveVitalsDay(groupA, 'p-1', '2026-11-18', { version: 0, values: { pulse: 70 }, shift: 'frueh' }),
+      createEntries(student, 'p-1', { ...input('puls', { pulse: 70 }), shift: 'frueh' }),
       400,
     );
+  });
+
+  it('refuses the teacher with 403 and writes nothing', async () => {
+    await expectStatus(createEntries(teacher, 'p-1', input('puls', { pulse: 70 })), 403);
+    expect(await db.select().from(vitalEntries)).toHaveLength(0);
   });
 });
 
-describe('getVitalsRange', () => {
-  it('returns inclusive records in ascending order with requirements', async () => {
-    await saveVitalsDay(groupB, 'p-2', '2026-10-01', { version: 0, values: { pulse: 70 } });
-    await saveVitalsDay(groupB, 'p-2', '2026-10-03', { version: 0, values: { pulse: 71 } });
+describe('deleteEntries', () => {
+  it('deletes a blood pressure pair as one unit and audits the deletion', async () => {
+    const created = await createEntries(
+      student,
+      'p-1',
+      input('blutdruck', { systolic: 130, diastolic: 85 }, '2026-11-14', '10:30'),
+    );
+    const submissionId = created.entries[0]!.submissionId;
 
-    const { records, requirements } = await getVitalsRange('p-2', '2026-10-01', '2026-10-03');
-    expect(records.map((record) => record.date)).toEqual(['2026-10-01', '2026-10-03']);
-    expect(requirements).toMatchObject({ systolic: true, diastolic: true, pulse: true });
-    expect(requirements.temperature).toBe(false);
+    const result = await deleteEntries(student, 'p-1', submissionId);
+    expect(result.deleted).toBe(2);
+    expect(await db.select().from(vitalEntries)).toHaveLength(0);
+
+    const rows = await db.select().from(auditLog);
+    const deletion = rows.find((row) => row.action === 'delete');
+    expect(deletion?.changes).toContain('"field":"systolic"');
+    expect(deletion?.changes).toContain('"from":130');
+  });
+
+  it('returns 404 on a second delete and changes nothing', async () => {
+    const created = await createEntries(student, 'p-1', input('puls', { pulse: 68 }));
+    const submissionId = created.entries[0]!.submissionId;
+    await deleteEntries(student, 'p-1', submissionId);
+    await expectStatus(deleteEntries(student, 'p-1', submissionId), 404);
+  });
+
+  it('refuses the teacher with 403', async () => {
+    const created = await createEntries(student, 'p-1', input('puls', { pulse: 68 }));
+    await expectStatus(
+      deleteEntries(teacher, 'p-1', created.entries[0]!.submissionId),
+      403,
+    );
+    expect(await db.select().from(vitalEntries)).toHaveLength(1);
+  });
+});
+
+describe('getEntriesRange', () => {
+  it('returns an inclusive range ordered by date, time and creation', async () => {
+    await createEntries(student, 'p-2', input('puls', { pulse: 90 }, '2026-10-03', '09:00'));
+    await createEntries(student, 'p-2', input('puls', { pulse: 70 }, '2026-10-01', '09:00'));
+    await createEntries(student, 'p-2', input('puls', { pulse: 80 }, '2026-10-01', '11:00'));
+
+    const entries = await getEntriesRange('p-2', '2026-10-01', '2026-10-03');
+    expect(entries.map((entry) => `${entry.observedDate} ${entry.observedTime}`)).toEqual([
+      '2026-10-01 09:00',
+      '2026-10-01 11:00',
+      '2026-10-03 09:00',
+    ]);
+  });
+
+  it('keeps creation order for equal times', async () => {
+    const base = {
+      patientId: 'p-2',
+      kind: 'pulse' as const,
+      value: 70,
+      observedDate: '2026-10-05',
+      observedTime: '09:00',
+    };
+    await db.insert(vitalEntries).values([
+      { ...base, id: 'third', submissionId: 's3', createdAt: '2026-10-05T10:00:03.000Z' },
+      { ...base, id: 'first', submissionId: 's1', createdAt: '2026-10-05T10:00:01.000Z' },
+      { ...base, id: 'second', submissionId: 's2', createdAt: '2026-10-05T10:00:02.000Z' },
+    ]);
+
+    const entries = await getEntriesRange('p-2', '2026-10-05', '2026-10-05');
+    expect(entries.map((entry) => entry.id)).toEqual(['first', 'second', 'third']);
   });
 
   it('rejects a reversed range and an over-long range', async () => {
-    await expectStatus(getVitalsRange('p-2', '2026-10-05', '2026-10-01'), 400);
-    await expectStatus(getVitalsRange('p-2', '2026-10-01', '2026-11-02'), 400);
+    await expectStatus(getEntriesRange('p-2', '2026-10-05', '2026-10-01'), 400);
+    await expectStatus(getEntriesRange('p-2', '2026-10-01', '2026-11-02'), 400);
   });
 
   it('accepts a full 31-day window', async () => {
-    const result = await getVitalsRange('p-2', '2026-10-01', '2026-10-31');
-    expect(Array.isArray(result.records)).toBe(true);
+    await expect(getEntriesRange('p-2', '2026-10-01', '2026-10-31')).resolves.toEqual([]);
+  });
+});
+
+describe('listRecentEntries', () => {
+  it('shows a blood-pressure pair once and keeps categories apart', async () => {
+    await createEntries(student, 'p-1', input('blutdruck', { systolic: 120, diastolic: 80 }));
+    await createEntries(student, 'p-1', input('gewicht', { weight: 74.5 }));
+
+    const recent = await listRecentEntries('p-1');
+    expect(recent.blutdruck).toHaveLength(1);
+    expect(recent.blutdruck[0]?.values).toEqual({ systolic: 120, diastolic: 80 });
+    expect(recent.gewicht).toHaveLength(1);
+    expect(recent.puls).toEqual([]);
+  });
+
+  it('caps each category at the 50 newest entries', async () => {
+    const rows = Array.from({ length: 55 }, (_, index) => ({
+      id: randomUUID(),
+      patientId: 'p-3',
+      kind: 'pulse' as const,
+      value: 60 + index,
+      observedDate: '2026-10-01',
+      observedTime: '09:00',
+      submissionId: randomUUID(),
+      createdAt: new Date(Date.UTC(2026, 9, 1, 8, 0, index)).toISOString(),
+    }));
+    await db.insert(vitalEntries).values(rows);
+
+    const recent = await listRecentEntries('p-3');
+    expect(recent.puls).toHaveLength(50);
+    expect(recent.puls[0]?.values.pulse).toBe(114);
   });
 });

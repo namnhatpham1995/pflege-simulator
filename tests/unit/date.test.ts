@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   addDays,
   compareDates,
+  dayDifference,
   daysInMonth,
+  endOfWeek,
   formatDe,
+  formatDeDateTime,
   isValidCalendarDate,
   isValidTime,
+  minutesFromWindowStart,
   nowInBerlin,
+  startOfWeek,
   todayInBerlin,
+  windowFor,
 } from '@/lib/date';
 
 describe('calendar dates as strings', () => {
@@ -71,5 +77,45 @@ describe('calendar dates as strings', () => {
     expect(isValidTime('23:59')).toBe(true);
     expect(isValidTime('24:00')).toBe(false);
     expect(isValidTime('7:05')).toBe(false);
+  });
+});
+
+describe('week windows', () => {
+  it('runs Monday to Sunday around the selected day', () => {
+    expect(startOfWeek('2026-11-18')).toBe('2026-11-16');
+    expect(endOfWeek('2026-11-18')).toBe('2026-11-22');
+    expect(startOfWeek('2026-11-16')).toBe('2026-11-16');
+    expect(startOfWeek('2026-11-22')).toBe('2026-11-16');
+  });
+
+  it('crosses month and year ends', () => {
+    expect(startOfWeek('2026-11-30')).toBe('2026-11-30');
+    expect(startOfWeek('2027-01-01')).toBe('2026-12-28');
+    expect(endOfWeek('2027-01-01')).toBe('2027-01-03');
+  });
+
+  it('handles a leap day and the 2027 clock change', () => {
+    expect(startOfWeek('2028-03-01')).toBe('2028-02-28');
+    expect(endOfWeek('2028-03-01')).toBe('2028-03-05');
+    expect(startOfWeek('2027-03-28')).toBe('2027-03-22');
+    expect(endOfWeek('2027-03-28')).toBe('2027-03-28');
+  });
+
+  it('labels the day and week windows', () => {
+    expect(windowFor('day', '2026-11-14').label).toBe('14.11.2026');
+    expect(windowFor('day', '2026-11-14').totalMinutes).toBe(1440);
+
+    const week = windowFor('week', '2026-11-18');
+    expect(week.from).toBe('2026-11-16');
+    expect(week.to).toBe('2026-11-22');
+    expect(week.label).toBe('16.11.2026 – 22.11.2026');
+    expect(week.totalMinutes).toBe(10080);
+  });
+
+  it('positions entries by date and time within the window', () => {
+    expect(minutesFromWindowStart('2026-11-16', '2026-11-18', '09:15')).toBe(3435);
+    expect(minutesFromWindowStart('2026-11-16', '2026-11-16', '00:00')).toBe(0);
+    expect(dayDifference('2026-11-16', '2026-11-22')).toBe(6);
+    expect(formatDeDateTime('2026-11-12', '10:33')).toBe('12.11.2026 10:33');
   });
 });

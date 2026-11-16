@@ -24,8 +24,9 @@ async function main(): Promise<void> {
 
   const deleted = await resetClassData(teacher, confirm);
   console.log(
-    `Gelöscht: ${deleted.vitals} Vitalwerte, ${deleted.reports} Pflegeberichte, ` +
-      `${deleted.revisions} Fassungen, ${deleted.audit} Protokolleinträge.`,
+    `Gelöscht: ${deleted.entries} Messwerte, ${deleted.vitals} alte Tagesdatensätze, ` +
+      `${deleted.reports} Pflegeberichte, ${deleted.revisions} Fassungen, ` +
+      `${deleted.audit} Protokolleinträge.`,
   );
   await closeDatabase();
 }

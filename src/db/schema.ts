@@ -18,6 +18,7 @@ import {
 export const patients = sqliteTable('patients', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),
+  dateOfBirth: text('date_of_birth'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -118,6 +119,50 @@ export const measurementRequirements = sqliteTable(
   ],
 );
 
+export const VITAL_ENTRY_KINDS = [
+  'systolic',
+  'diastolic',
+  'pulse',
+  'temperature',
+  'weight',
+  'height',
+  'pain',
+  'glucose',
+] as const;
+
+/**
+ * One row per value: absence is a missing row, never a nullable cell, and the
+ * two rows of a blood-pressure save share their submission_id.
+ */
+export const vitalEntries = sqliteTable(
+  'vital_entries',
+  {
+    id: text('id').primaryKey(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    kind: text('kind', { enum: VITAL_ENTRY_KINDS }).notNull(),
+    value: real('value').notNull(),
+    observedDate: text('observed_date').notNull(),
+    observedTime: text('observed_time').notNull(),
+    submissionId: text('submission_id').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    check(
+      'vital_entries_kind_check',
+      sql`${t.kind} in ('systolic', 'diastolic', 'pulse', 'temperature', 'weight', 'height', 'pain', 'glucose')`,
+    ),
+    index('vital_entries_patient_when').on(
+      t.patientId,
+      t.observedDate,
+      t.observedTime,
+      t.createdAt,
+    ),
+    index('vital_entries_submission').on(t.patientId, t.submissionId),
+  ],
+);
+
 export const careReports = sqliteTable(
   'care_reports',
   {
@@ -189,6 +234,7 @@ export type PatientRow = typeof patients.$inferSelect;
 export type StudentGroupRow = typeof studentGroups.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type VitalDailyRecordRow = typeof vitalDailyRecords.$inferSelect;
+export type VitalEntryRow = typeof vitalEntries.$inferSelect;
 export type MeasurementRequirementRow = typeof measurementRequirements.$inferSelect;
 export type CareReportRow = typeof careReports.$inferSelect;
 export type CareReportRevisionRow = typeof careReportRevisions.$inferSelect;

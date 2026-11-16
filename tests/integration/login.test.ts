@@ -1,21 +1,15 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { loginAttempts, patients, sessions, studentGroups } from '@/db/schema';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { loginAttempts, sessions } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
-import {
-  GENERIC_LOGIN_FAILURE,
-  loginAsTeacher,
-  loginWithGroupCode,
-  normalizeAccessCode,
-} from '@/server/auth/login';
+import { resetEnvCache } from '@/lib/env';
+import { GENERIC_LOGIN_FAILURE, loginAsTeacher } from '@/server/auth/login';
 import { hashPassword } from '@/server/auth/password';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
-
-const CODE_A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-const CODE_B = 'ZYXWVUTSRQPONMLKJIHGFEDCBA765432';
-const INACTIVE_CODE = 'MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43U';
+const originalHash = process.env.TEACHER_PASSWORD_HASH;
+const originalSecret = process.env.SESSION_SECRET;
 
 async function expectHttpError(promise: Promise<unknown>, status: number, code?: string) {
   try {
@@ -25,39 +19,12 @@ async function expectHttpError(promise: Promise<unknown>, status: number, code?:
     expect(error).toBeInstanceOf(HttpError);
     expect((error as HttpError).status).toBe(status);
     if (code) expect((error as HttpError).code).toBe(code);
+    return error as HttpError;
   }
 }
 
 beforeAll(async () => {
   db = await appDatabase();
-  await db.insert(patients).values([
-    { id: 'p-1', displayName: 'Frau Albrecht', createdAt: new Date().toISOString() },
-    { id: 'p-2', displayName: 'Herr Brandt', createdAt: new Date().toISOString() },
-    { id: 'p-3', displayName: 'Frau Czerwenka', createdAt: new Date().toISOString() },
-  ]);
-  await db.insert(studentGroups).values([
-    {
-      id: 'g-1',
-      displayName: 'Gruppe 1',
-      patientId: 'p-1',
-      accessCodeHash: hashPassword(CODE_A),
-      isActive: 1,
-    },
-    {
-      id: 'g-2',
-      displayName: 'Gruppe 2',
-      patientId: 'p-2',
-      accessCodeHash: hashPassword(CODE_B),
-      isActive: 1,
-    },
-    {
-      id: 'g-3',
-      displayName: 'Gruppe 3',
-      patientId: 'p-3',
-      accessCodeHash: hashPassword(INACTIVE_CODE),
-      isActive: 0,
-    },
-  ]);
 });
 
 beforeEach(async () => {
@@ -65,84 +32,71 @@ beforeEach(async () => {
   await db.delete(sessions);
 });
 
+afterEach(() => {
+  process.env.TEACHER_PASSWORD_HASH = originalHash;
+  process.env.SESSION_SECRET = originalSecret;
+  resetEnvCache();
+});
+
 afterAll(async () => {
   const { closeDatabase } = await import('@/db/client');
   await closeDatabase();
 });
 
-describe('group code login', () => {
-  it('normalises typed codes', () => {
-    expect(normalizeAccessCode(' abcd efgh-2345 ')).toBe('ABCDEFGH2345');
-  });
-
-  it('signs a group in and issues a session row', async () => {
-    const result = await loginWithGroupCode(CODE_A.toLowerCase(), { ip: '10.0.0.1' });
-    expect(result.actor).toMatchObject({ type: 'group', id: 'g-1', patientId: 'p-1' });
+describe('teacher login', () => {
+  it('accepts the configured teacher password and issues a session', async () => {
+    const result = await loginAsTeacher('lehrer-test-passwort', { ip: '10.0.1.1' });
+    expect(result.actor).toMatchObject({ type: 'teacher', id: 'teacher' });
     expect(result.session.token).toHaveLength(43);
 
     const rows = await db.select().from(sessions);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.actorId).toBe('g-1');
+    expect(rows[0]?.actorType).toBe('teacher');
     expect(rows[0]?.idHash).not.toBe(result.session.token);
   });
 
-  it('refuses an unknown code with the generic message', async () => {
-    try {
-      await loginWithGroupCode('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', { ip: '10.0.0.2' });
-      throw new Error('expected a failure');
-    } catch (error) {
-      expect(error).toBeInstanceOf(HttpError);
-      expect((error as HttpError).status).toBe(401);
-      expect((error as HttpError).message).toBe(GENERIC_LOGIN_FAILURE);
-    }
+  it('accepts a short, simple phrase', async () => {
+    process.env.TEACHER_PASSWORD_HASH = hashPassword('kurz');
+    resetEnvCache();
+
+    const result = await loginAsTeacher('kurz', { ip: '10.0.1.2' });
+    expect(result.actor.type).toBe('teacher');
   });
 
-  it('refuses an inactive group even with the right code', async () => {
-    await expectHttpError(loginWithGroupCode(INACTIVE_CODE, { ip: '10.0.0.3' }), 401);
+  it('rejects a wrong password with one generic 401 and no cookie data', async () => {
+    const error = await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.3' }), 401, 'UNAUTHENTICATED');
+    expect(error.message).toBe(GENERIC_LOGIN_FAILURE);
+    expect(await db.select().from(sessions)).toHaveLength(0);
   });
 
-  it('reports 429 on the fifth failed attempt in the window', async () => {
+  it('reports 429 with a retry time on the fifth failed attempt', async () => {
     for (let attempt = 1; attempt <= 4; attempt += 1) {
-      await expectHttpError(loginWithGroupCode('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', { ip: '10.0.0.4' }), 401);
+      await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.4' }), 401);
     }
-    try {
-      await loginWithGroupCode('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', { ip: '10.0.0.4' });
-      throw new Error('expected a failure');
-    } catch (error) {
-      expect(error).toBeInstanceOf(HttpError);
-      expect((error as HttpError).status).toBe(429);
-      expect((error as HttpError).code).toBe('RATE_LIMITED');
-      expect((error as HttpError).retryAfterSeconds).toBeGreaterThan(0);
-    }
+    const error = await expectHttpError(
+      loginAsTeacher('falsch', { ip: '10.0.1.4' }),
+      429,
+      'RATE_LIMITED',
+    );
+    expect(error.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  it('does not lock a different group out', async () => {
-    for (let attempt = 1; attempt <= 4; attempt += 1) {
-      await expectHttpError(loginWithGroupCode('CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC', { ip: '10.0.0.5' }), 401);
+  it('keeps a correct password from bypassing an exhausted window', async () => {
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.5' }), attempt === 5 ? 429 : 401);
     }
-    const result = await loginWithGroupCode(CODE_B, { ip: '10.0.0.6' });
-    expect(result.actor.id).toBe('g-2');
+    await expectHttpError(loginAsTeacher('lehrer-test-passwort', { ip: '10.0.1.5' }), 429);
   });
 
-  it('clears the code window after a successful login', async () => {
+  it('clears the failure counter after a successful login', async () => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await expectHttpError(loginWithGroupCode('DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD', { ip: '10.0.0.7' }), 401);
+      await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.6' }), 401);
     }
-    await loginWithGroupCode(CODE_A, { ip: '10.0.0.8' });
+    await loginAsTeacher('lehrer-test-passwort', { ip: '10.0.1.6' });
 
-    await expectHttpError(loginWithGroupCode('DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD', { ip: '10.0.0.9' }), 401);
     const remaining = await db.select().from(loginAttempts);
-    expect(remaining.every((row) => row.count < 5)).toBe(true);
-  });
-});
+    expect(remaining.every((row) => row.key !== 'code:teacher')).toBe(true);
 
-describe('teacher login', () => {
-  it('accepts the configured teacher password', async () => {
-    const result = await loginAsTeacher('lehrer-test-passwort', { ip: '10.0.1.1' });
-    expect(result.actor).toMatchObject({ type: 'teacher', id: 'teacher' });
-  });
-
-  it('rejects a wrong teacher password', async () => {
-    await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.2' }), 401);
+    await expectHttpError(loginAsTeacher('falsch', { ip: '10.0.1.7' }), 401);
   });
 });

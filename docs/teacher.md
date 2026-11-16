@@ -1,27 +1,41 @@
 # Lehrkraft-Konsole
 
-Die Lehrkraft meldet sich mit ihrem eigenen Passwort an und sieht alle zehn fiktiven
-Patienten. Sie hat **lesenden** Zugriff auf Vitalwerte und Pflegeberichte; kein Endpunkt
-erlaubt ihr das Anlegen oder Ändern von Einträgen (`403 FORBIDDEN`).
+Die Lehrkraft meldet sich mit ihrem Passwort an und sieht alle zehn fiktiven Patienten. Sie
+hat **lesenden** Zugriff auf Dashboard, Messwerte und Pflegeberichte; kein Endpunkt erlaubt
+ihr das Anlegen, Ändern oder Löschen von Einträgen (`403 FORBIDDEN`).
+
+## Patientendaten bearbeiten
+
+Im Patientenbereich (Kopfzeile) öffnet die Lehrkraft **Patientendaten bearbeiten**:
+
+- **Name**: 1–100 Zeichen nach dem Trimmen; ein leerer Name wird mit einem Feldfehler
+  abgelehnt.
+- **Geburtsdatum**: optional. Gültiges Kalenderdatum, nicht vor dem 01.01.1900 und nicht in
+  der Zukunft. Über **Geburtsdatum löschen** wird der Wert auf `null` gesetzt.
+- Jede akzeptierte Änderung erhält eine Audit-Zeile mit Lehrkraft, Patient, Feld sowie altem
+  und neuem Wert.
+
+```http
+PATCH /api/patients/{patientId}
+Origin: http://localhost:3000
+Content-Type: application/json
+
+{ "displayName": "Herr Berger", "dateOfBirth": "1948-03-07" }
+```
+
+```json
+{ "patient": { "id": "…", "displayName": "Herr Berger", "dateOfBirth": "1948-03-07" } }
+```
+
+Ohne Lehrkraft-Sitzung antwortet die Route `401`, mit einem fremden `Origin` `403`.
+Der Seed überschreibt bearbeitete Namen und Geburtsdaten nicht.
 
 ## Erwartete Messwerte
 
-Pro Patient legt die Lehrkraft fest, welche der acht Felder „erwartet“ sind:
-
-- Standard nach dem Seed: `systolic`, `diastolic`, `pulse`.
-- `temperature`, `weight`, `height`, `pain`, `glucose` sind optional.
-- Ein erwartetes, aber leeres Feld wird rot markiert und im Hinweis unter dem Diagramm
-  genannt. Ein optionales leeres Feld erzeugt **keine** Warnung.
-- Die Änderung gilt nur für den gewählten Patienten und wird im `audit_log` festgehalten.
-
-```http
-PATCH /api/patients/{patientId}/requirements
-Origin: http://localhost:3000
-{ "field": "temperature", "expected": true }
-```
-
-Antwort `200 { requirements }` – immer die vollständige, gespeicherte Policy. Die Oberfläche
-zeigt deshalb den Serverstand und keinen optimistischen Zwischenzustand.
+Der frühere Erwartungs-Editor ist entfernt. Es gibt keine roten Zellen, kein `Fehlt` und
+keine Warnung über fehlende Werte: Eine freie, zeitgestempelte Dokumentation vergleicht nicht
+mehr gegen eine Tagescheckliste. Die Tabelle `measurement_requirements` bleibt unbenutzt in
+der Datenbank, bis ein späterer Change sie entfernt.
 
 ## Klassendaten zurücksetzen
 
@@ -40,9 +54,10 @@ npm run db:reset-class-data -- --confirm RESET
 ```
 
 Beides ruft denselben Service auf. In einer Transaktion werden `care_report_revisions`,
-`care_reports`, `vital_daily_records` und `audit_log` geleert. **Erhalten bleiben**
-Patienten, Gruppen, Zugangscode-Hashes und die Measurement-Policy – die Codes des Semesters
-funktionieren also weiter.
+`care_reports`, `vital_entries` und `audit_log` geleert; zusätzlich werden die alten
+`vital_daily_records` aus der früheren Version geräumt. **Erhalten bleiben** Patienten mit
+ihren aktuellen Namen und Geburtsdaten. Ohne die exakte Bestätigung `RESET` wird nichts
+gelöscht (`400`), ohne Lehrkraft-Sitzung antwortet die Route `401`.
 
 ## Grenzen
 

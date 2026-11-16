@@ -1,20 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { patients, vitalDailyRecords } from '@/db/schema';
+import { patients, vitalDailyRecords, vitalEntries } from '@/db/schema';
 import { createTestDatabase, type TestDatabase } from '../helpers/database';
 
 let testDb: TestDatabase;
 const patientId = 'patient-a';
 const now = '2026-11-16T08:00:00.000Z';
 
-function insertVitals(date: string, painScore: number | null) {
-  return testDb.db.insert(vitalDailyRecords).values({
-    id: `vitals-${date}`,
+function insertEntry(overrides: Partial<typeof vitalEntries.$inferInsert> = {}) {
+  return testDb.db.insert(vitalEntries).values({
+    id: `entry-${Math.random().toString(36).slice(2)}`,
     patientId,
-    date,
-    painScore,
+    kind: 'pulse',
+    value: 72,
+    observedDate: '2026-11-12',
+    observedTime: '09:15',
+    submissionId: 'submission-1',
     createdAt: now,
-    updatedAt: now,
+    ...overrides,
   });
 }
 
@@ -33,7 +36,15 @@ afterAll(async () => {
 
 describe('schema invariants', () => {
   it('round-trips a patient and its vital record through the libSQL file', async () => {
-    await insertVitals('2026-11-10', 3);
+    await testDb.db.insert(vitalDailyRecords).values({
+      id: 'vitals-2026-11-10',
+      patientId,
+      date: '2026-11-10',
+      painScore: 3,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     const rows = await testDb.db
       .select()
       .from(vitalDailyRecords)
@@ -41,35 +52,48 @@ describe('schema invariants', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.patientId).toBe(patientId);
     expect(rows[0]?.painScore).toBe(3);
-    expect(rows[0]?.version).toBe(1);
   });
 
-  it('stores pain 0 as zero, not as missing', async () => {
-    await insertVitals('2026-11-11', 0);
+  it('stores a nullable date of birth on the patient', async () => {
+    await testDb.db
+      .update(patients)
+      .set({ dateOfBirth: '1948-03-07' })
+      .where(eq(patients.id, patientId));
+    const rows = await testDb.db.select().from(patients).where(eq(patients.id, patientId));
+    expect(rows[0]?.dateOfBirth).toBe('1948-03-07');
+  });
+
+  it('rejects an unknown kind through the CHECK constraint', async () => {
+    await expect(
+      insertEntry({ kind: 'spo2' as typeof vitalEntries.$inferInsert.kind }),
+    ).rejects.toThrow();
+  });
+
+  it('refuses a NULL value', async () => {
+    await expect(
+      insertEntry({ value: null as unknown as number }),
+    ).rejects.toThrow();
+  });
+
+  it('accepts two entries with the same patient, kind, date and time', async () => {
+    await insertEntry({ id: 'duplicate-a' });
+    await insertEntry({ id: 'duplicate-b', value: 74, submissionId: 'submission-2' });
+
     const rows = await testDb.db
       .select()
-      .from(vitalDailyRecords)
-      .where(eq(vitalDailyRecords.date, '2026-11-11'));
-    expect(rows[0]?.painScore).toBe(0);
+      .from(vitalEntries)
+      .where(eq(vitalEntries.patientId, patientId));
+    expect(rows.filter((row) => row.kind === 'pulse')).toHaveLength(2);
   });
 
-  it('rejects a second record for the same patient and day', async () => {
-    await expect(insertVitals('2026-11-10', 4)).rejects.toThrow();
-  });
-
-  it('rejects a pain score above 10 at the database level', async () => {
-    await expect(insertVitals('2026-11-12', 11)).rejects.toThrow();
-  });
-
-  it('rejects a record for an unknown patient through the foreign key', async () => {
-    await expect(
-      testDb.db.insert(vitalDailyRecords).values({
-        id: 'vitals-orphan',
-        patientId: 'does-not-exist',
-        date: '2026-11-13',
-        createdAt: now,
-        updatedAt: now,
-      }),
-    ).rejects.toThrow();
+  it('keeps the legacy tables in place for the previous release', async () => {
+    const result = await testDb.client.execute(
+      "select name from sqlite_master where type = 'table'",
+    );
+    const names = result.rows.map((row) => String(row.name));
+    expect(names).toContain('vital_daily_records');
+    expect(names).toContain('measurement_requirements');
+    expect(names).toContain('student_groups');
+    expect(names).toContain('vital_entries');
   });
 });

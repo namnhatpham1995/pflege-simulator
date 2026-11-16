@@ -1,103 +1,114 @@
 import { describe, expect, it } from 'vitest';
-import { VITAL_FIELDS } from '@/lib/types';
-import { VITAL_RULES, crossFieldErrors, vitalsPatchSchema } from '@/lib/validation/vitals';
+import { categoryValueErrors, entryCreateSchema } from '@/lib/validation/vitals';
 
-function parseValue(field: string, value: unknown) {
-  return vitalsPatchSchema.safeParse({ version: 0, values: { [field]: value } });
+function parse(category: string, values: Record<string, string | number>, time = '09:15') {
+  return entryCreateSchema.safeParse({ category, values, date: '2026-11-12', time });
 }
 
-describe('field ranges', () => {
-  for (const field of VITAL_FIELDS) {
-    const rule = VITAL_RULES[field];
+describe('entryCreateSchema', () => {
+  it('accepts each category with its own values and German decimals', () => {
+    const cases: Array<[string, Record<string, string>]> = [
+      ['blutdruck', { systolic: '120', diastolic: '80' }],
+      ['puls', { pulse: '72' }],
+      ['temperatur', { temperature: '36,8' }],
+      ['gewicht', { weight: '74,5' }],
+      ['groesse', { height: '178' }],
+      ['schmerzen', { pain: '0' }],
+      ['blutzucker', { glucose: '110' }],
+    ];
 
-    it(`${field} accepts both bounds`, () => {
-      expect(parseValue(field, rule.min).success).toBe(true);
-      expect(parseValue(field, rule.max).success).toBe(true);
-    });
-
-    it(`${field} rejects values outside the range`, () => {
-      expect(parseValue(field, rule.min - 1).success).toBe(false);
-      expect(parseValue(field, rule.max + 1).success).toBe(false);
-    });
-
-    it(`${field} accepts null and an empty string as clear`, () => {
-      const fromNull = parseValue(field, null);
-      const fromEmpty = parseValue(field, '');
-      expect(fromNull.success).toBe(true);
-      expect(fromEmpty.success).toBe(true);
-      if (fromNull.success) expect(fromNull.data.values[field as keyof typeof fromNull.data.values]).toBeNull();
-      if (fromEmpty.success) expect(fromEmpty.data.values[field as keyof typeof fromEmpty.data.values]).toBeNull();
-    });
-  }
-});
-
-describe('pain and integers', () => {
-  it('stores pain 0 as a value, not as missing', () => {
-    const result = parseValue('pain', 0);
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.values.pain).toBe(0);
+    for (const [category, values] of cases) {
+      const result = parse(category, values);
+      expect(result.success, category).toBe(true);
+    }
   });
 
-  it('rejects a fractional integer field', () => {
-    expect(parseValue('pulse', 72.5).success).toBe(false);
-    expect(parseValue('pain', 3.2).success).toBe(false);
-  });
-
-  it('accepts bacteria-free decimals for temperature', () => {
-    const result = parseValue('temperature', 36.8);
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.values.temperature).toBe(36.8);
-  });
-});
-
-describe('payload shape', () => {
-  it('accepts a comma decimal and normalises it', () => {
-    const result = vitalsPatchSchema.safeParse({ version: 0, values: { temperature: '36,8' } });
+  it('parses a comma decimal into the same number', () => {
+    const result = parse('temperatur', { temperature: '36,8' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.values.temperature).toBe(36.8);
   });
 
-  it('rejects unknown keys, including a shift', () => {
-    expect(vitalsPatchSchema.safeParse({ version: 0, values: { shift: 'frueh' } }).success).toBe(false);
-    expect(vitalsPatchSchema.safeParse({ version: 0, values: { weight: 70, extra: 1 } }).success).toBe(false);
-    expect(vitalsPatchSchema.safeParse({ version: 0, values: {}, shift: 'frueh' }).success).toBe(false);
+  it('keeps pain 0 as a recorded value', () => {
+    const result = parse('schmerzen', { pain: 0 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.values.pain).toBe(0);
+      expect(categoryValueErrors('schmerzen', result.data.values)).toEqual({});
+    }
   });
 
-  it('requires a non-negative integer version', () => {
-    expect(vitalsPatchSchema.safeParse({ values: {} }).success).toBe(false);
-    expect(vitalsPatchSchema.safeParse({ version: -1, values: {} }).success).toBe(false);
-    expect(vitalsPatchSchema.safeParse({ version: 1.5, values: {} }).success).toBe(false);
-    expect(vitalsPatchSchema.safeParse({ version: 0, values: {} }).success).toBe(true);
+  it('treats a blank input as a missing required value', () => {
+    const result = parse('schmerzen', { pain: '' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(categoryValueErrors('schmerzen', result.data.values)).toEqual({
+        pain: 'Bitte einen Wert eingeben.',
+      });
+    }
   });
 
-  it('rejects a non-numeric text value', () => {
-    expect(parseValue('pulse', 'schnell').success).toBe(false);
+  it('rejects an unknown field inside values', () => {
+    expect(parse('puls', { pulse: '72', spo2: '98' }).success).toBe(false);
+  });
+
+  it('rejects a top-level shift key', () => {
+    const result = entryCreateSchema.safeParse({
+      category: 'puls',
+      values: { pulse: '72' },
+      date: '2026-11-12',
+      time: '09:15',
+      shift: 'frueh',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects 24:00 and 12:60', () => {
+    expect(parse('puls', { pulse: '72' }, '24:00').success).toBe(false);
+    expect(parse('puls', { pulse: '72' }, '12:60').success).toBe(false);
+  });
+
+  it('rejects an impossible date', () => {
+    const result = entryCreateSchema.safeParse({
+      category: 'puls',
+      values: { pulse: '72' },
+      date: '2027-02-29',
+      time: '09:15',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts 02:30 on the spring clock-change day', () => {
+    const result = entryCreateSchema.safeParse({
+      category: 'puls',
+      values: { pulse: '72' },
+      date: '2027-03-28',
+      time: '02:30',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an out-of-range pulse', () => {
+    expect(parse('puls', { pulse: '900' }).success).toBe(false);
   });
 });
 
-describe('cross-field rule', () => {
-  const empty = {
-    systolic: null,
-    diastolic: null,
-    pulse: null,
-    temperature: null,
-    weight: null,
-    height: null,
-    pain: null,
-    glucose: null,
-  };
-
-  it('accepts diastolic below systolic', () => {
-    expect(crossFieldErrors({ ...empty, systolic: 120, diastolic: 80 })).toEqual({});
+describe('categoryValueErrors', () => {
+  it('requires both blood-pressure values', () => {
+    expect(categoryValueErrors('blutdruck', { systolic: 120 })).toEqual({
+      diastolic: 'Bitte einen Wert eingeben.',
+    });
   });
 
-  it('rejects diastolic equal to or above systolic', () => {
-    expect(crossFieldErrors({ ...empty, systolic: 120, diastolic: 120 }).diastolic).toBeTruthy();
-    expect(crossFieldErrors({ ...empty, systolic: 120, diastolic: 130 }).diastolic).toBeTruthy();
+  it('rejects diastolic not below systolic', () => {
+    expect(categoryValueErrors('blutdruck', { systolic: 120, diastolic: 120 })).toEqual({
+      diastolic: 'Der diastolische Wert muss kleiner als der systolische Wert sein.',
+    });
   });
 
-  it('does not complain when only one of the pair is present', () => {
-    expect(crossFieldErrors({ ...empty, systolic: 120 })).toEqual({});
-    expect(crossFieldErrors({ ...empty, diastolic: 90 })).toEqual({});
+  it('rejects a value from another category', () => {
+    expect(categoryValueErrors('puls', { pulse: 72, weight: 70 })).toEqual({
+      weight: 'Dieser Wert gehört nicht zur gewählten Kategorie.',
+    });
   });
 });

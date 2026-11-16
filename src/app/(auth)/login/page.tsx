@@ -3,7 +3,7 @@ import { LoginForm } from '@/components/login-form';
 import { requireActor } from '@/server/auth/session';
 
 export const metadata = {
-  title: 'Anmelden – Pflegedokumentation',
+  title: 'Lehrkraft-Anmeldung – Pflegedokumentation',
 };
 
 export default async function LoginPage() {
@@ -14,7 +14,7 @@ export default async function LoginPage() {
   } catch {
     alreadySignedIn = false;
   }
-  if (alreadySignedIn) redirect('/patients');
+  if (alreadySignedIn) redirect('/teacher');
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4 py-12">
@@ -22,10 +22,10 @@ export default async function LoginPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-accent">
           Pflegedokumentation – Simulation
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-ink">Anmelden</h1>
+        <h1 className="mt-1 text-2xl font-semibold text-ink">Anmeldung für die Lehrkraft</h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Lerngruppen melden sich mit ihrem Zugangscode an, die Lehrkraft mit ihrem Passwort.
-          Alle Patientinnen und Patienten sind fiktiv.
+          Studierende starten ohne Anmeldung über <strong>Start</strong>. Die Lehrkraft meldet sich
+          hier mit ihrem Passwort an und liest die Dokumentation nur mit.
         </p>
       </div>
       <div className="rounded-lg border border-line bg-surface p-5 shadow-panel">

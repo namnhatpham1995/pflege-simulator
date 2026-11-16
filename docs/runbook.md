@@ -30,12 +30,16 @@ npm run db:migrate
 npm run db:seed
 ```
 
-- `db:migrate` spielt `drizzle/` ein und ist wiederholbar.
-- `db:seed` legt zehn fiktive Patienten, zehn Gruppen und 80 Erwartungszeilen an. Es ist
-  idempotent: bestehende Gruppen behalten ihren Code.
-- Neue Codes werden **einmalig** auf stdout ausgegeben und in `.local/group-codes.txt`
-  (gitignoriert, Modus 0600) abgelegt. Danach sind sie nicht mehr abrufbar; verlorene Codes
-  nur über `npm run db:seed -- --rotate "Gruppe 4"` ersetzen.
+- `db:migrate` führt `scripts/migrate.ts` aus und damit denselben `runMigrations`-Pfad wie die
+  Anwendung. Grund: `drizzle-kit migrate` beendet sich gegen Turso mit Exit-Code 1 ohne
+  Meldung; der Fehler ließ sich ohne Turso-Zugangsdaten hier nicht reproduzieren. Gegen eine
+  frische lokale libSQL-Datei läuft `npm run db:migrate` erfolgreich durch (verifiziert).
+- Migration `0000` legt das Grundschema an; Migration `0001` ergänzt **additiv**
+  `vital_entries` und `patients.date_of_birth`. Die alten Tabellen bleiben bestehen.
+- `db:seed` legt zehn fiktive Patienten mit stabilen IDs und ohne Geburtsdatum an. Es ist
+  idempotent und überschreibt keine von der Lehrkraft geänderten Details. Gruppen und
+  Zugangscodes werden nicht mehr erzeugt.
+- Ein Turso-Lauf von `0001` ist Teil der Release-Aufgaben und hier **nicht** ausgeführt.
 
 ## 3. Vercel
 
@@ -50,8 +54,8 @@ Umgebungsvariablen im Projekt (Production und Preview getrennt prüfen):
 | `TEACHER_DISPLAY_NAME` | nein | Anzeigename, Standard „Lehrkraft“ |
 
 Ablauf: Branch nach `main` mergen → Vercel baut → `npm run db:migrate` **vor** dem ersten
-Login gegen die Produktionsdatenbank ausführen → `npm run db:seed` einmalig → zehn Codes
-sicher an die Gruppen verteilen.
+Login gegen die Produktionsdatenbank ausführen → bei Bedarf `npm run db:seed` einmalig.
+Studierende brauchen keine Codes; die Lehrkraft meldet sich mit ihrem Passwort an.
 
 ## 4. Backup
 
@@ -68,19 +72,21 @@ Aufbewahrung: ein Backup pro Semesterende und vor jedem `db:migrate` gegen Produ
 turso db create pflege-restore
 turso db shell pflege-restore < backup-2026-11-16.sql
 turso db shell pflege-restore "SELECT COUNT(*) FROM patients;"      # 10
-turso db shell pflege-restore "SELECT COUNT(*) FROM student_groups;" # 10
+turso db shell pflege-restore "SELECT COUNT(*) FROM vital_entries;" # Einträge prüfen
 ```
 
 Erst wenn die Zählungen stimmen, die Anwendung auf die Scratch-URL zeigen lassen
-(`TURSO_DATABASE_URL` in einer Preview-Umgebung) und dort einen Login testen. Niemals direkt
-in die Produktionsdatenbank zurückspielen, ohne vorher ein aktuelles Backup zu ziehen.
+(`TURSO_DATABASE_URL` in einer Preview-Umgebung) und dort einen Patienten öffnen. Niemals
+direkt in die Produktionsdatenbank zurückspielen, ohne vorher ein aktuelles Backup zu ziehen.
 
 ## 6. Rollback
 
 1. Vercel → Deployments → vorheriges Deployment „Promote to Production“.
-2. Bei Datenproblemen: Scratch-Restore prüfen, dann Produktion aus dem Backup neu aufbauen
-   (neue Datenbank anlegen, Restore einspielen, `TURSO_DATABASE_URL` umstellen).
-3. `db:migrate` ist additiv; ein Rollback der Anwendung ohne Schema-Rollback ist der Normalfall.
+2. Die vorherige Version ignoriert `vital_entries` und `patients.date_of_birth`; beide bleiben
+   erhalten. Neue Messwerte aus der neuen Version bleiben in `vital_entries` liegen.
+3. Bei Datenproblemen: Scratch-Restore prüfen, dann Produktion aus dem Backup neu aufbauen.
+4. `db:migrate` ist additiv; ein Rollback der Anwendung ohne Schema-Rollback ist der
+   Normalfall.
 
 ## 7. Semesterwechsel
 
@@ -88,13 +94,21 @@ in die Produktionsdatenbank zurückspielen, ohne vorher ein aktuelles Backup zu 
 npm run db:reset-class-data -- --confirm RESET
 ```
 
-Löscht Vitalwerte, Pflegeberichte, Fassungen und Auditzeilen. Patienten, Gruppen, Codes und
-Erwartungen bleiben. Alternativ die Lehrkraft-Konsole verwenden; beide Wege rufen denselben
-Service auf.
+Löscht Messwerte, Pflegeberichte, Fassungen und Auditzeilen (einschließlich der alten
+Tagesdatensätze). Patienten mit ihren Namen und Geburtsdaten bleiben. Alternativ die
+Lehrkraft-Konsole verwenden; beide Wege rufen denselben Service auf.
+
+## 8. Patientendetails
+
+Die Lehrkraft ändert Name und Geburtsdatum im Patientenbereich (Dialog
+„Patientendaten bearbeiten“) oder per `PATCH /api/patients/{id}`. Eine Änderung wird auditiert
+und vom Seed nicht überschrieben. Es gibt keinen Erwartungs-Editor mehr.
 
 ## Status der Rehearsals
 
-- Lokal verifiziert: Migration, Seed, `db:reset-class-data` gegen `file:./.local/e2e.db`.
-- **Nicht verifiziert:** Turso-Provisionierung, `.dump`-Backup und Restore (Aufgabe 8.9).
-  Dafür fehlen Turso-Zugangsdaten; die Kommandos oben sind dokumentiert, aber in dieser
+- Lokal verifiziert: Migrationen `0000` und `0001`, Seed, `db:reset-class-data` gegen lokale
+  libSQL-Dateien.
+- **Nicht verifiziert:** Turso-Provisionierung, Migration gegen Turso, `.dump`-Backup,
+  Restore und Produktions-Smoke. Dafür fehlen Turso-/Vercel-Zugangsdaten und die Freigabe
+  für das Produktionsdeployment; die Kommandos oben sind dokumentiert, aber in dieser
   Umgebung nicht ausgeführt.

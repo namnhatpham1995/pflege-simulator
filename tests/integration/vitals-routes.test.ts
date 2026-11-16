@@ -1,33 +1,40 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import * as rangeRoute from '@/app/api/patients/[patientId]/vitals/route';
-import {
-  GET as getDay,
-  PATCH as patchDay,
-} from '@/app/api/patients/[patientId]/vitals/[date]/route';
-import { patients, studentGroups } from '@/db/schema';
+import { GET as getRange, POST as createEntry } from '@/app/api/patients/[patientId]/vitals/route';
+import { DELETE as deleteEntry } from '@/app/api/patients/[patientId]/vitals/[submissionId]/route';
+import { patients, vitalEntries } from '@/db/schema';
 import { createSession } from '@/server/auth/session';
 import type { Actor } from '@/lib/types';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
-let groupToken = '';
 let teacherToken = '';
+let submissionId = '';
 
 const ORIGIN = 'http://localhost:3000';
 
-function ctx(patientId: string, date: string) {
-  return { params: Promise.resolve({ patientId, date }) };
+function ctx(patientId: string, submission = '') {
+  return { params: Promise.resolve({ patientId, submissionId: submission }) };
 }
 
-function patchRequest(date: string, body: unknown, options: { cookie?: string; origin?: string | null } = {}) {
+function post(body: unknown, options: { cookie?: string; origin?: string | null } = {}) {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.origin !== null) headers.origin = options.origin ?? ORIGIN;
   if (options.cookie) headers.cookie = options.cookie;
-  return new Request(`${ORIGIN}/api/patients/p-1/vitals/${date}`, {
-    method: 'PATCH',
+  return new Request(`${ORIGIN}/api/patients/p-1/vitals`, {
+    method: 'POST',
     headers,
     body: JSON.stringify(body),
+  });
+}
+
+function remove(options: { cookie?: string; origin?: string | null } = {}) {
+  const headers: Record<string, string> = {};
+  if (options.origin !== null) headers.origin = options.origin ?? ORIGIN;
+  if (options.cookie) headers.cookie = options.cookie;
+  return new Request(`${ORIGIN}/api/patients/p-1/vitals/${submissionId}`, {
+    method: 'DELETE',
+    headers,
   });
 }
 
@@ -38,14 +45,7 @@ beforeAll(async () => {
     { id: 'p-1', displayName: 'Frau Albrecht', createdAt: now },
     { id: 'p-2', displayName: 'Herr Brandt', createdAt: now },
   ]);
-  await db.insert(studentGroups).values([
-    { id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1', accessCodeHash: 'scrypt$1$1$1$00$00', isActive: 1 },
-    { id: 'g-2', displayName: 'Gruppe 2', patientId: 'p-2', accessCodeHash: 'scrypt$1$1$1$00$00', isActive: 1 },
-  ]);
-
-  const group: Actor = { type: 'group', id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1' };
   const teacher: Actor = { type: 'teacher', id: 'teacher', displayName: 'Test-Lehrkraft' };
-  groupToken = (await createSession(group)).token;
   teacherToken = (await createSession(teacher)).token;
 });
 
@@ -54,124 +54,107 @@ afterAll(async () => {
   await closeDatabase();
 });
 
-const groupCookie = () => ({ cookie: `pflege_session=${groupToken}` });
-
-describe('GET vitals routes', () => {
-  it('answers 401 without a session', async () => {
-    const response = await getDay(
-      new Request(`${ORIGIN}/api/patients/p-1/vitals/2026-11-10`),
-      ctx('p-1', '2026-11-10'),
-    );
-    expect(response.status).toBe(401);
-  });
-
-  it('returns an empty day with version 0 without creating a record', async () => {
-    const response = await getDay(
-      new Request(`${ORIGIN}/api/patients/p-1/vitals/2026-11-10`, { headers: groupCookie() }),
-      ctx('p-1', '2026-11-10'),
-    );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ record: null, version: 0 });
-  });
-
-  it("answers 403 for another group's patient", async () => {
-    const response = await getDay(
-      new Request(`${ORIGIN}/api/patients/p-2/vitals/2026-11-10`, { headers: groupCookie() }),
-      ctx('p-2', '2026-11-10'),
-    );
-    expect(response.status).toBe(403);
-  });
-
-  it('rejects an invalid date with 400', async () => {
-    const response = await getDay(
-      new Request(`${ORIGIN}/api/patients/p-1/vitals/2027-02-29`, { headers: groupCookie() }),
-      ctx('p-1', '2027-02-29'),
+describe('GET vitals route', () => {
+  it('requires from and to', async () => {
+    const response = await getRange(
+      new Request(`${ORIGIN}/api/patients/p-1/vitals`),
+      ctx('p-1'),
     );
     expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION');
+    expect((await response.json()).error.code).toBe('VALIDATION');
   });
 
-  it('requires from and to on the range route', async () => {
-    const response = await rangeRoute.GET(
-      new Request(`${ORIGIN}/api/patients/p-1/vitals`, { headers: groupCookie() }),
-      { params: Promise.resolve({ patientId: 'p-1' }) },
-    );
-    expect(response.status).toBe(400);
-  });
-
-  it('returns a range with requirements', async () => {
-    const response = await rangeRoute.GET(
-      new Request(`${ORIGIN}/api/patients/p-1/vitals?from=2026-11-10&to=2026-11-16`, {
-        headers: groupCookie(),
-      }),
-      { params: Promise.resolve({ patientId: 'p-1' }) },
+  it('serves an anonymous range read', async () => {
+    const response = await getRange(
+      new Request(`${ORIGIN}/api/patients/p-1/vitals?from=2026-11-10&to=2026-11-16`),
+      ctx('p-1'),
     );
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(Array.isArray(body.records)).toBe(true);
-    expect(body.requirements).toHaveProperty('systolic', true);
+    await expect(response.json()).resolves.toEqual({ entries: [] });
   });
 
-  it('exposes no POST on the range route', () => {
-    expect('POST' in rangeRoute).toBe(false);
+  it('answers 404 for an unknown patient', async () => {
+    const response = await getRange(
+      new Request(`${ORIGIN}/api/patients/missing/vitals?from=2026-11-10&to=2026-11-16`),
+      ctx('missing'),
+    );
+    expect(response.status).toBe(404);
   });
 });
 
-describe('PATCH vitals route', () => {
-  it('rejects a foreign origin with 403 ORIGIN', async () => {
-    const response = await patchDay(
-      patchRequest('2026-11-10', { version: 0, values: {} }, { ...groupCookie(), origin: 'https://evil.example' }),
-      ctx('p-1', '2026-11-10'),
+describe('POST vitals route', () => {
+  it('rejects a foreign or missing origin', async () => {
+    const foreign = await createEntry(
+      post({ category: 'puls', values: { pulse: 70 }, date: '2026-11-12', time: '09:15' }, { origin: 'https://evil.example' }),
+      ctx('p-1'),
     );
-    expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error.code).toBe('ORIGIN');
+    expect(foreign.status).toBe(403);
+    expect((await foreign.json()).error.code).toBe('ORIGIN');
+
+    const missing = await createEntry(
+      post({ category: 'puls', values: { pulse: 70 }, date: '2026-11-12', time: '09:15' }, { origin: null }),
+      ctx('p-1'),
+    );
+    expect(missing.status).toBe(403);
   });
 
-  it('rejects a missing origin', async () => {
-    const response = await patchDay(
-      patchRequest('2026-11-10', { version: 0, values: {} }, { ...groupCookie(), origin: null }),
-      ctx('p-1', '2026-11-10'),
+  it('creates an anonymous entry with 201', async () => {
+    const response = await createEntry(
+      post({ category: 'blutdruck', values: { systolic: 120, diastolic: 80 }, date: '2026-11-12', time: '08:00' }),
+      ctx('p-1'),
     );
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(201);
+    const payload = await response.json();
+    expect(payload.entries).toHaveLength(2);
+    expect(payload.groups[0].values).toEqual({ systolic: 120, diastolic: 80 });
+    submissionId = payload.entries[0].submissionId;
   });
 
-  it('rejects an unknown key with 400', async () => {
-    const response = await patchDay(
-      patchRequest('2026-11-10', { version: 0, values: { shift: 'frueh' } }, groupCookie()),
-      ctx('p-1', '2026-11-10'),
+  it('rejects an invalid pair without writing a row', async () => {
+    const response = await createEntry(
+      post({ category: 'blutdruck', values: { systolic: 120 }, date: '2026-11-12', time: '09:00' }),
+      ctx('p-1'),
     );
     expect(response.status).toBe(400);
-  });
-
-  it('saves a day and then reports a conflict with the current record', async () => {
-    const first = await patchDay(
-      patchRequest('2026-11-20', { version: 0, values: { systolic: 120, diastolic: 80, pulse: 72 } }, groupCookie()),
-      ctx('p-1', '2026-11-20'),
-    );
-    expect(first.status).toBe(200);
-    const saved = await first.json();
-    expect(saved.version).toBe(1);
-
-    const stale = await patchDay(
-      patchRequest('2026-11-20', { version: 0, values: { pulse: 80 } }, groupCookie()),
-      ctx('p-1', '2026-11-20'),
-    );
-    expect(stale.status).toBe(409);
-    const conflict = await stale.json();
-    expect(conflict.error.code).toBe('CONFLICT');
-    expect(conflict.current.version).toBe(1);
-    expect(conflict.current.record.pulseBpm).toBe(72);
+    expect((await response.json()).error.fields.diastolic).toBeTruthy();
   });
 
   it('refuses the teacher with 403', async () => {
-    const response = await patchDay(
-      patchRequest('2026-11-21', { version: 0, values: { pulse: 70 } }, { cookie: `pflege_session=${teacherToken}` }),
-      ctx('p-1', '2026-11-21'),
+    const response = await createEntry(
+      post(
+        { category: 'puls', values: { pulse: 70 }, date: '2026-11-12', time: '10:00' },
+        { cookie: `pflege_session=${teacherToken}` },
+      ),
+      ctx('p-1'),
     );
     expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error.code).toBe('FORBIDDEN');
+    expect((await response.json()).error.code).toBe('FORBIDDEN');
+  });
+});
+
+describe('DELETE vitals route', () => {
+  it('deletes the submission and answers 404 the second time', async () => {
+    const first = await deleteEntry(remove(), ctx('p-1', submissionId));
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toEqual({ deleted: 2 });
+
+    const second = await deleteEntry(remove(), ctx('p-1', submissionId));
+    expect(second.status).toBe(404);
+  });
+
+  it('refuses the teacher with 403', async () => {
+    const created = await createEntry(
+      post({ category: 'puls', values: { pulse: 66 }, date: '2026-11-12', time: '11:00' }),
+      ctx('p-1'),
+    );
+    const payload = await created.json();
+    const id = payload.entries[0].submissionId;
+
+    const response = await deleteEntry(
+      remove({ cookie: `pflege_session=${teacherToken}` }),
+      ctx('p-1', id),
+    );
+    expect(response.status).toBe(403);
+    expect(await db.select().from(vitalEntries)).toHaveLength(1);
   });
 });

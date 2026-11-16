@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { VITAL_FIELDS, type VitalField } from '@/lib/types';
+import { isValidCalendarDate, isValidTime } from '@/lib/date';
+import {
+  MEASUREMENT_CATEGORIES,
+  VITAL_FIELDS,
+  categoryDefinition,
+  type MeasurementCategory,
+  type VitalField,
+} from '@/lib/types';
 
 export interface VitalFieldRule {
   field: VitalField;
@@ -23,6 +30,11 @@ export const VITAL_RULES: Record<VitalField, VitalFieldRule> = {
 };
 
 export const VITAL_RULE_LIST: VitalFieldRule[] = VITAL_FIELDS.map((field) => VITAL_RULES[field]);
+
+export const CATEGORY_KEYS = MEASUREMENT_CATEGORIES.map((category) => category.key) as [
+  MeasurementCategory,
+  ...MeasurementCategory[],
+];
 
 function numericField(field: VitalField) {
   const rule = VITAL_RULES[field];
@@ -50,8 +62,8 @@ function numericField(field: VitalField) {
 }
 
 /**
- * Unknown keys are rejected, which is how a `shift` in a vitals payload (or any
- * other accidental field) is refused instead of silently ignored.
+ * Unknown keys are rejected, which is how a `shift` in a measurement payload (or
+ * any other accidental field) is refused instead of silently ignored.
  */
 export const vitalsValuesSchema = z.strictObject({
   systolic: numericField('systolic').optional(),
@@ -64,22 +76,49 @@ export const vitalsValuesSchema = z.strictObject({
   glucose: numericField('glucose').optional(),
 });
 
-export const vitalsPatchSchema = z.strictObject({
-  version: z.number({ required_error: 'version fehlt.' }).int().min(0),
+export const entryCreateSchema = z.strictObject({
+  category: z.enum(CATEGORY_KEYS, {
+    errorMap: () => ({ message: 'Bitte eine gültige Messkategorie wählen.' }),
+  }),
   values: vitalsValuesSchema,
+  date: z
+    .string()
+    .refine(isValidCalendarDate, 'Bitte ein gültiges Datum im Format JJJJ-MM-TT angeben.'),
+  time: z.string().refine(isValidTime, 'Bitte eine gültige Uhrzeit im Format HH:MM angeben.'),
 });
 
-export type VitalsPatch = z.infer<typeof vitalsPatchSchema>;
+export type EntryCreateInput = z.infer<typeof entryCreateSchema>;
 export type VitalsValuesPatch = z.infer<typeof vitalsValuesSchema>;
 
-/** Cross-field rule evaluated on the merged record, never on the patch alone. */
-export function crossFieldErrors(
-  values: Record<VitalField, number | null>,
+/**
+ * Category rules: exactly the category's fields, every one filled, nothing else.
+ * The blood-pressure pair rule runs on the two values of this one save only.
+ */
+export function categoryValueErrors(
+  category: MeasurementCategory,
+  values: VitalsValuesPatch,
 ): Partial<Record<VitalField, string>> {
-  if (values.systolic !== null && values.diastolic !== null && values.diastolic >= values.systolic) {
-    return {
-      diastolic: 'Der diastolische Wert muss kleiner als der systolische Wert sein.',
-    };
+  const definition = categoryDefinition(category);
+  const errors: Partial<Record<VitalField, string>> = {};
+
+  for (const field of definition.fields) {
+    if (values[field] === undefined || values[field] === null) {
+      errors[field] = 'Bitte einen Wert eingeben.';
+    }
   }
-  return {};
+  for (const field of VITAL_FIELDS) {
+    if (!definition.fields.includes(field) && values[field] !== undefined && values[field] !== null) {
+      errors[field] = 'Dieser Wert gehört nicht zur gewählten Kategorie.';
+    }
+  }
+
+  if (category === 'blutdruck') {
+    const systolic = values.systolic;
+    const diastolic = values.diastolic;
+    if (typeof systolic === 'number' && typeof diastolic === 'number' && diastolic >= systolic) {
+      errors.diastolic = 'Der diastolische Wert muss kleiner als der systolische Wert sein.';
+    }
+  }
+
+  return errors;
 }

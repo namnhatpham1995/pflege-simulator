@@ -1,44 +1,61 @@
 # Klassenpilot – Checkliste
 
-Vor dem ersten Einsatz mit einer Klasse einmal durchgehen. Alle Personen und Werte sind fiktiv.
+Vor dem ersten Einsatz mit einer Klasse einmal durchgehen. Alle Personen und Werte sind fiktiv,
+und der Zugang ist absichtlich offen.
 
 ## Vorbereitung
 
 - [ ] `npm run db:migrate` und `npm run db:seed` gegen die Zielumgebung ausgeführt.
-- [ ] Zehn Codes aus `.local/group-codes.txt` bzw. dem einmaligen stdout gesichert und
-      gruppenweise verteilt (nicht im Klassenchat öffentlich posten).
 - [ ] Lehrkraft-Login mit `TEACHER_PASSWORD_HASH` getestet.
-- [ ] Backup vor dem Pilot gezogen (`turso db shell … .dump`).
+- [ ] `Start` auf der Frontseite getestet: Patientinnenliste ohne Anmeldung erreichbar.
+- [ ] Backup vor dem Pilot gezogen (`turso db shell … .dump`), falls schon Klassendaten
+      existieren.
 
-## Zehn-Gruppen-Check
+## Zehn-Patienten-Check
 
-- [ ] Alle zehn Gruppen melden sich gleichzeitig an; keine Gruppe erhält `429`.
-- [ ] Jede Gruppe sieht **nur** ihren zugewiesenen Patienten (Name im Kopf der Seite).
-- [ ] Jede Gruppe speichert einen systolischen Wert und lädt die Seite neu; der Wert bleibt.
-- [ ] Jede Gruppe schreibt einen Pflegebericht; er erscheint mit Datum, Uhrzeit und Schicht.
+- [ ] Alle zehn Patientinnen und Patienten erscheinen in der Liste, jeweils mit Name und
+      Geburtsdatum oder „Geburtsdatum nicht angegeben“.
+- [ ] Ein Klick öffnet das Dashboard; die drei Tabs stehen in der Reihenfolge Dashboard,
+      Vitalwerte, Pflegebericht.
+- [ ] Jede Kategorie lässt sich speichern: Blutdruck (zwei Werte), Puls, Temperatur, Gewicht,
+      Größe, Schmerzen, Blutzucker.
+- [ ] Ein Blutdruck-Paar erscheint als **eine** Zeile in „Letzte Einträge“ und als zwei
+      Punkte im Diagramm.
+- [ ] Zwei Speicherungen zur selben Minute erzeugen zwei Einträge; keiner überschreibt den
+      anderen.
+- [ ] Im Dashboard zeigt `Tag` den gewählten Tag, `Woche` Montag bis Sonntag; Zurück/Weiter
+      verschiebt um einen Tag bzw. eine Woche.
+- [ ] Hover oder Tastaturfokus auf ein Wertkästchen zeigt `TT.MM.JJJJ HH:MM`; bei Puls,
+      Temperatur und Blutdruck leuchtet der passende Diagrammpunkt.
+- [ ] Löschen fragt nach, entfernt ein Blutdruck-Paar vollständig und ist danach auditiert.
 
 ## Zweitgerät-Check
 
-- [ ] Dieselbe Gruppe meldet sich auf einem zweiten Gerät an; die Daten sind identisch.
-- [ ] Ein auf Gerät A gespeicherter Wert erscheint nach dem Neuladen auf Gerät B.
-- [ ] Ein veralteter Stand auf Gerät B führt zu einem Konfliktbanner statt zu stillem
-      Überschreiben.
+- [ ] Zwei Geräte öffnen denselben Patienten; ein auf Gerät A gespeicherter Wert erscheint
+      nach dem Neuladen auf Gerät B.
+- [ ] Ein Löschen auf Gerät A verschwindet auf Gerät B nach dem Neuladen aus der Liste und
+      dem Dashboard.
 
-## Isolationsversuch
+## Offener Zugang – bewusster Test
 
-- [ ] Mit dem Code von Gruppe 1 die Patienten-URL von Gruppe 2 aufrufen → `404`/„nicht gefunden“.
-- [ ] Denselben Versuch per API: `GET /api/patients/<fremde-id>/vitals?from=…&to=…` → `403`.
-- [ ] Lehrkraft-Konsole mit einem Gruppencode öffnen → `404`.
+- [ ] Ein beliebiger Besucher kann einen anderen Patienten öffnen: das ist gewollt.
+- [ ] Die Lehrkraft sieht in Vitalwerte und Pflegebericht **kein** Eingabeformular und keinen
+      Löschknopf.
+- [ ] Ein Schreibversuch mit Lehrkraft-Sitzung über die API endet mit `403`.
+- [ ] Ein fremder `Origin` endet mit `403 ORIGIN`.
+- [ ] Ohne Lehrkraft-Sitzung antwortet `/teacher` mit der Anmeldeseite und die Lehrkraft-API
+      mit `401`.
 
 ## Ende des Semesters
 
 - [ ] Backup gezogen und geprüft (Zählungen in einer Scratch-Datenbank).
 - [ ] `npm run db:reset-class-data -- --confirm RESET` ausgeführt.
-- [ ] Danach: zehn Patienten und zehn Gruppen vorhanden, Vitalwerte und Berichte leer.
-- [ ] Codes bleiben gültig; neue Gruppen brauchen keinen neuen Seed.
+- [ ] Danach: zehn Patienten mit ihren Namen und Geburtsdaten vorhanden, Messwerte und
+      Berichte leer.
+- [ ] Keine Zugangscodes mehr nötig; die Lehrkraft meldet sich mit ihrem Passwort an.
 
 ## Lokal verifiziert
 
-Mit `file:./.local/e2e.db` (frisch geseedet) geprüft: Anmeldung, Patientenzuordnung,
-Speichern und Neuladen, Konflikt-`409`, Reset-Zählungen. Nicht geprüft: echte Zehn-Gruppen-
-Last, echtes Zweitgerät, Turso-Backup/Restore (Aufgaben 8.8/8.9 sind blockiert).
+Mit `file:./.local/e2e.db` (frisch geseedet) geprüft: Start, Patient öffnen, alle sieben
+Kategorien speichern, Dashboard Tag/Woche, Hover-Verknüpfung, Löschen, Lehrkraft-Ansicht ohne
+Eingabefelder. Nicht geprüft: echte Zehn-Gruppen-Last, echtes Zweitgerät, Turso-Backup/Restore.

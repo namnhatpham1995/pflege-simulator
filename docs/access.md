@@ -1,37 +1,32 @@
 # Zugang und Sitzungen
 
-## Anmeldung
+## Offener Übungsbetrieb
 
-Zwei getrennte Anmeldearten, beide über `POST /api/auth/login`:
+Studierende brauchen keine Anmeldung. Die Startseite bietet einen primären **Start**-Knopf,
+der die Liste aller zehn fiktiven Patienten öffnet. Jeder Besucher darf jeden Patienten lesen
+und dessen Messwerte und Pflegeberichte anlegen, ändern oder löschen. Die Lehrkraft liest nur.
 
-| Art | Eingabe | Prüfung |
-|---|---|---|
-| Lerngruppe | Zugangscode (32 Zeichen, Base32) | scrypt-Vergleich gegen `student_groups.access_code_hash` |
-| Lehrkraft | Passwort | scrypt-Vergleich gegen `TEACHER_PASSWORD_HASH` aus der Server-Umgebung |
+Das ist eine bewusste Entscheidung für einen Übungssimulator mit ausschließlich erfundenen
+Daten. Schutzmechanismen bleiben: `Origin`-Prüfung bei jeder schreibenden Anfrage, gedrosselte
+Lehrkraft-Anmeldung, Audit-Zeilen für jede Änderung und der Klassendaten-Reset.
 
-Fehlermeldungen sind absichtlich generisch („Zugangscode oder Passwort ist falsch.“); die
-Antwort verrät nicht, ob ein Code existiert oder eine Gruppe inaktiv ist.
+## Lehrkraft-Anmeldung
 
-Zugangscodes werden nie im Klartext gespeichert. Sie entstehen einmalig beim Seed
-(`npm run db:seed`), stehen danach in `.local/group-codes.txt` und lassen sich nur über
+Nur die Lehrkraft meldet sich an: `POST /api/auth/login` mit `{ "password": "…" }`. Geprüft
+wird per scrypt gegen `TEACHER_PASSWORD_HASH` aus der Server-Umgebung. Es gibt keine
+Mindestlänge und keine Komplexitätsregel – ein kurzer Merksatz genügt.
 
-```bash
-npm run db:seed -- --rotate "Gruppe 3"
-```
-
-neu setzen. Das ist der einzige Wiederherstellungsweg.
-
-## Lehrkraft-Passwort setzen
+Fehlermeldungen sind absichtlich generisch („Das Passwort ist falsch.“); die Antwort verrät
+nicht, ob ein Konto existiert.
 
 ```bash
-npm run hash-password -- "mein Passwort"   # gibt einen scrypt-Hash aus
-npm run hash-password -- --write           # erzeugt Passwort + SESSION_SECRET und schreibt .env.local
+npm run hash-password -- "kurzer Merksatz"   # gibt einen scrypt-Hash aus
+npm run hash-password -- --write             # erzeugt Passwort + SESSION_SECRET in .env.local
 ```
 
-`--write` legt das Klartext-Passwort einmalig in `.local/teacher-credentials.txt` ab; danach
-existiert nur noch der Hash. `TEACHER_PASSWORD_HASH` gehört ausschließlich in die
-Server-Umgebung (lokal `.env.local`, produktiv Vercel-Projektvariablen), nie in eine
-`NEXT_PUBLIC_`-Variable.
+`--write` legt das Klartext-Passwort einmalig in `.local/teacher-credentials.txt` ab. Danach
+existiert nur der Hash. `TEACHER_PASSWORD_HASH` gehört ausschließlich in die Server-Umgebung
+(lokal `.env.local`, produktiv Vercel-Projektvariablen), nie in eine `NEXT_PUBLIC_`-Variable.
 
 ## Sitzungen
 
@@ -44,6 +39,8 @@ Server-Umgebung (lokal `.env.local`, produktiv Vercel-Projektvariablen), nie in 
   (Session-Fixation) und stellt eine neue aus.
 - Abmelden (`POST /api/auth/logout`) löscht die Sitzungszeile und setzt das Cookie auf
   `maxAge: 0`. Ohne Sitzung antwortet die Route mit 401.
+- Alte Gruppen-Sitzungen aus früheren Versionen werden ignoriert; `sessions.actor_type` ist
+  nur noch `teacher`. Die Tabelle `student_groups` bleibt unbenutzt bestehen.
 
 ## Drosselung
 
@@ -51,16 +48,22 @@ Server-Umgebung (lokal `.env.local`, produktiv Vercel-Projektvariablen), nie in 
 
 | Schlüssel | Grenze | Zweck |
 |---|---|---|
-| `code:<sha256(code)>` | 5 Fehlversuche / 5 Minuten | Eine Gruppe darf die Klasse nicht aussperren |
-| `ip:<sha256(adresse)>` | 60 Fehlversuche / 10 Minuten | Schutz gegen Durchprobieren vieler Codes |
+| `code:teacher` | 5 Fehlversuche / 5 Minuten | Schutz vor Durchprobieren |
+| `ip:<sha256(adresse)>` | 60 Fehlversuche / 10 Minuten | Schutz über viele Clients |
 
 Der fünfte Fehlversuch im Fenster antwortet mit `429` und `Retry-After`. Eine erfolgreiche
-Anmeldung löscht die Fenster des Code-Schlüssels; andere Gruppen bleiben unberührt.
+Anmeldung löscht das Fenster des Lehrkraft-Schlüssels; ein korrektes Passwort hebt eine
+bereits erschöpfte Sperre nicht auf.
 
 ## Autorisierung
 
 `requirePatientAccess(patientId)` ist der einzige Prüfpfad für Server-Komponenten und
-Route-Handler. Eine Gruppe erhält ausschließlich ihren zugeordneten Patienten (sonst 403,
-unbekannte IDs 404), die Lehrkraft alle zehn. Jede schreibende Route ruft zusätzlich
-`assertSameOrigin(request)` auf: fehlt der `Origin`-Header oder zeigt er auf eine fremde
-Herkunft, antwortet die Route mit 403 `ORIGIN`.
+Route-Handler. Es prüft nur, dass der Patient existiert (sonst 404), und liefert für eine
+gültige Lehrkraft-Sitzung den Lehrkraft-Aktor, sonst den anonymen Studierenden
+`('group', 'patient:<patientId>')`.
+
+`assertStudentWrite(actor)` weist die Lehrkraft mit `403 FORBIDDEN` ab. `requireTeacher`
+schützt die Lehrkraft-Konsole, den Patienten-PATCH und den Klassendaten-Reset und antwortet
+ohne Sitzung mit `401`. Jede schreibende Route ruft zusätzlich `assertSameOrigin(request)`
+auf: fehlt der `Origin`-Header oder zeigt er auf eine fremde Herkunft, antwortet die Route mit
+`403 ORIGIN`.

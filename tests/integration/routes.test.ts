@@ -1,19 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { POST as loginRoute } from '@/app/api/auth/login/route';
 import { POST as logoutRoute } from '@/app/api/auth/logout/route';
 import { GET as patientsRoute } from '@/app/api/patients/route';
-import { loginAttempts, patients, sessions, studentGroups } from '@/db/schema';
-import { hashPassword } from '@/server/auth/password';
-import { createSession } from '@/server/auth/session';
+import { loginAttempts, patients, sessions } from '@/db/schema';
+import { createSession, hashSessionToken } from '@/server/auth/session';
 import type { Actor } from '@/lib/types';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
 let db: Database;
-let groupToken = '';
 let teacherToken = '';
 
-const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const ORIGIN = 'http://localhost:3000';
 
 function jsonRequest(path: string, body: unknown, options: { origin?: string | null; cookie?: string } = {}) {
@@ -31,20 +28,14 @@ beforeAll(async () => {
   db = await appDatabase();
   await db.insert(patients).values([
     { id: 'p-1', displayName: 'Frau Albrecht', createdAt: new Date().toISOString() },
-    { id: 'p-2', displayName: 'Herr Brandt', createdAt: new Date().toISOString() },
+    { id: 'p-2', displayName: 'Herr Brandt', dateOfBirth: '1950-01-02', createdAt: new Date().toISOString() },
   ]);
-  await db.insert(studentGroups).values({
-    id: 'g-1',
-    displayName: 'Gruppe 1',
-    patientId: 'p-1',
-    accessCodeHash: hashPassword(CODE),
-    isActive: 1,
-  });
+  const teacher: Actor = { type: 'teacher', id: 'teacher', displayName: 'Test-Lehrkraft' };
+  teacherToken = (await createSession(teacher)).token;
+});
 
-  const groupActor: Actor = { type: 'group', id: 'g-1', displayName: 'Gruppe 1', patientId: 'p-1' };
-  const teacherActor: Actor = { type: 'teacher', id: 'teacher', displayName: 'Test-Lehrkraft' };
-  groupToken = (await createSession(groupActor)).token;
-  teacherToken = (await createSession(teacherActor)).token;
+beforeEach(async () => {
+  await db.delete(loginAttempts);
 });
 
 afterAll(async () => {
@@ -55,41 +46,32 @@ afterAll(async () => {
 describe('POST /api/auth/login', () => {
   it('rejects a foreign origin before touching credentials', async () => {
     const response = await loginRoute(
-      jsonRequest('/api/auth/login', { mode: 'group', code: CODE }, { origin: 'https://evil.example' }),
+      jsonRequest('/api/auth/login', { password: 'lehrer-test-passwort' }, { origin: 'https://evil.example' }),
     );
     expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error.code).toBe('ORIGIN');
+    expect((await response.json()).error.code).toBe('ORIGIN');
   });
 
-  it('rejects a missing origin', async () => {
-    const response = await loginRoute(
-      jsonRequest('/api/auth/login', { mode: 'group', code: CODE }, { origin: null }),
+  it('rejects a missing origin and an invalid body', async () => {
+    const missing = await loginRoute(
+      jsonRequest('/api/auth/login', { password: 'lehrer-test-passwort' }, { origin: null }),
     );
-    expect(response.status).toBe(403);
+    expect(missing.status).toBe(403);
+
+    const invalid = await loginRoute(jsonRequest('/api/auth/login', { mode: 'group', code: 'ABCD' }));
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).error.code).toBe('VALIDATION');
   });
 
-  it('rejects an invalid body', async () => {
-    const response = await loginRoute(jsonRequest('/api/auth/login', { mode: 'group', shift: 'frueh' }));
-    expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.error.code).toBe('VALIDATION');
-  });
-
-  it('returns 401 for a wrong code', async () => {
-    await db.delete(loginAttempts);
-    const response = await loginRoute(
-      jsonRequest('/api/auth/login', { mode: 'group', code: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
-    );
+  it('returns 401 for a wrong password', async () => {
+    const response = await loginRoute(jsonRequest('/api/auth/login', { password: 'falsch' }));
     expect(response.status).toBe(401);
-    const body = await response.json();
-    expect(body.error.message).toBe('Zugangscode oder Passwort ist falsch.');
+    expect((await response.json()).error.message).toBe('Das Passwort ist falsch.');
   });
 
-  it('signs in and sets an HttpOnly session cookie', async () => {
-    await db.delete(loginAttempts);
+  it('signs the teacher in and sets an HttpOnly session cookie', async () => {
     const response = await loginRoute(
-      jsonRequest('/api/auth/login', { mode: 'group', code: CODE }),
+      jsonRequest('/api/auth/login', { password: 'lehrer-test-passwort' }),
     );
     expect(response.status).toBe(200);
     const setCookie = response.headers.get('set-cookie') ?? '';
@@ -97,50 +79,34 @@ describe('POST /api/auth/login', () => {
     expect(setCookie.toLowerCase()).toContain('httponly');
     expect(setCookie.toLowerCase()).toContain('samesite=lax');
     const body = await response.json();
-    expect(body.actor).toMatchObject({ type: 'group', patientId: 'p-1' });
+    expect(body.actor).toMatchObject({ type: 'teacher' });
   });
 
   it('rotates an existing session cookie', async () => {
-    const first = await loginRoute(jsonRequest('/api/auth/login', { mode: 'group', code: CODE }));
+    const first = await loginRoute(jsonRequest('/api/auth/login', { password: 'lehrer-test-passwort' }));
     const firstCookie = (first.headers.get('set-cookie') ?? '').split(';')[0]!;
     const second = await loginRoute(
-      jsonRequest('/api/auth/login', { mode: 'group', code: CODE }, { cookie: firstCookie }),
+      jsonRequest('/api/auth/login', { password: 'lehrer-test-passwort' }, { cookie: firstCookie }),
     );
     expect(second.status).toBe(200);
     const rotated = (second.headers.get('set-cookie') ?? '').split(';')[0]!;
     expect(rotated).not.toBe(firstCookie);
-
-    const oldToken = firstCookie.split('=')[1]!;
-    const oldSession = await db.select().from(sessions);
-    expect(oldSession.some((row) => row.idHash.includes(oldToken))).toBe(false);
   });
 });
 
 describe('GET /api/patients', () => {
-  it('answers 401 JSON for an anonymous request', async () => {
-    const response = await patientsRoute(new Request(`${ORIGIN}/api/patients`));
-    expect(response.status).toBe(401);
-    const body = await response.json();
-    expect(body.error.code).toBe('UNAUTHENTICATED');
-  });
-
-  it('returns only the assigned patient for a group', async () => {
-    const response = await patientsRoute(
-      new Request(`${ORIGIN}/api/patients`, { headers: { cookie: `pflege_session=${groupToken}` } }),
-    );
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.patients).toHaveLength(1);
-    expect(body.patients[0].id).toBe('p-1');
-  });
-
-  it('returns every patient for the teacher', async () => {
-    const response = await patientsRoute(
-      new Request(`${ORIGIN}/api/patients`, { headers: { cookie: `pflege_session=${teacherToken}` } }),
-    );
+  it('returns all patients to an anonymous visitor', async () => {
+    const response = await patientsRoute();
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.patients).toHaveLength(2);
+    expect(body.patients[0]).toHaveProperty('dateOfBirth');
+  });
+
+  it('returns the same patients to the teacher', async () => {
+    const response = await patientsRoute();
+    expect(response.status).toBe(200);
+    expect((await response.json()).patients).toHaveLength(2);
   });
 });
 
@@ -161,9 +127,7 @@ describe('POST /api/auth/logout', () => {
     expect(setCookie).toContain('pflege_session=;');
     expect(setCookie).toContain('Max-Age=0');
 
-    const after = await patientsRoute(
-      new Request(`${ORIGIN}/api/patients`, { headers: { cookie: `pflege_session=${token}` } }),
-    );
-    expect(after.status).toBe(401);
+    const rows = await db.select().from(sessions);
+    expect(rows.some((row) => row.idHash === hashSessionToken(token))).toBe(false);
   });
 });

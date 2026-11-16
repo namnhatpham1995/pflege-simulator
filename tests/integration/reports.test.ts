@@ -9,6 +9,7 @@ import {
   listReports,
   updateReport,
 } from '@/server/services/reports';
+import { anonymousActor } from '@/server/services/access';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
@@ -64,7 +65,7 @@ describe('createReport', () => {
 
     expect(first.id).not.toBe(second.id);
     expect(second.version).toBe(1);
-    expect(second.groupId).toBe('g-1');
+    expect(second.groupId).toBeNull();
 
     const stored = await db.select({ count: sql<number>`count(*)` }).from(careReports);
     expect(stored[0]?.count).toBe(2);
@@ -165,6 +166,16 @@ describe('updateReport and revisions', () => {
     const after = await listReportRevisions('p-1', created.id);
     expect(after).toHaveLength(before.length);
     expect(after.at(-1)?.body).toBe('Ausgangslage.');
+  });
+
+  it('records the anonymous patient actor on a report edit', async () => {
+    const student = anonymousActor('p-1');
+    const created = await createReport(student, 'p-1', reportInput({ body: 'Anonym.' }));
+    await updateReport(student, 'p-1', created.id, { version: 1, body: 'Neu.' });
+
+    const revisions = await listReportRevisions('p-1', created.id);
+    expect(revisions[0]?.actorType).toBe('group');
+    expect(revisions[0]?.actorId).toBe('patient:p-1');
   });
 
   it('answers 404 for an unknown report and for a foreign patient', async () => {

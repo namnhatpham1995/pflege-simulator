@@ -24,16 +24,64 @@ export const VITAL_FIELD_LABELS: Record<VitalField, string> = {
   glucose: 'Blutzucker',
 };
 
-export const VITAL_FIELD_COLUMNS = {
-  systolic: 'systolicMmhg',
-  diastolic: 'diastolicMmhg',
-  pulse: 'pulseBpm',
-  temperature: 'temperatureC',
-  weight: 'weightKg',
-  height: 'heightCm',
-  pain: 'painScore',
-  glucose: 'glucoseMgDl',
-} as const satisfies Record<VitalField, string>;
+export const VITAL_FIELD_UNITS: Record<VitalField, string> = {
+  systolic: 'mmHg',
+  diastolic: 'mmHg',
+  pulse: 'Schläge/min',
+  temperature: '°C',
+  weight: 'kg',
+  height: 'cm',
+  pain: '0–10',
+  glucose: 'mg/dL',
+};
+
+/** The four kinds drawn on the dashboard chart. */
+export const CHARTED_KINDS: readonly VitalField[] = [
+  'systolic',
+  'diastolic',
+  'pulse',
+  'temperature',
+];
+
+export type MeasurementCategory =
+  | 'blutdruck'
+  | 'puls'
+  | 'temperatur'
+  | 'gewicht'
+  | 'groesse'
+  | 'schmerzen'
+  | 'blutzucker';
+
+export interface CategoryDefinition {
+  key: MeasurementCategory;
+  label: string;
+  fields: readonly VitalField[];
+}
+
+/** One input tab per category; Blutdruck is the only pair. */
+export const MEASUREMENT_CATEGORIES = [
+  { key: 'blutdruck', label: 'Blutdruck', fields: ['systolic', 'diastolic'] },
+  { key: 'puls', label: 'Puls', fields: ['pulse'] },
+  { key: 'temperatur', label: 'Temperatur', fields: ['temperature'] },
+  { key: 'gewicht', label: 'Gewicht', fields: ['weight'] },
+  { key: 'groesse', label: 'Größe', fields: ['height'] },
+  { key: 'schmerzen', label: 'Schmerzen', fields: ['pain'] },
+  { key: 'blutzucker', label: 'Blutzucker', fields: ['glucose'] },
+] as const satisfies readonly CategoryDefinition[];
+
+export function categoryForKind(kind: VitalField): MeasurementCategory {
+  const category = MEASUREMENT_CATEGORIES.find((entry) =>
+    (entry.fields as readonly VitalField[]).includes(kind),
+  );
+  if (!category) throw new Error(`Unbekannte Messart: ${kind}`);
+  return category.key;
+}
+
+export function categoryDefinition(key: MeasurementCategory): CategoryDefinition {
+  const category = MEASUREMENT_CATEGORIES.find((entry) => entry.key === key);
+  if (!category) throw new Error(`Unbekannte Kategorie: ${key}`);
+  return category;
+}
 
 export const SHIFTS = ['frueh', 'spaet', 'nacht'] as const;
 export type Shift = (typeof SHIFTS)[number];
@@ -50,36 +98,38 @@ export interface Actor {
   type: ActorType;
   id: string;
   displayName: string;
-  /** Only set for group actors. */
+  /** Only set for the anonymous student actor of a patient workspace. */
   patientId?: string;
 }
 
 export interface PatientSummary {
   id: string;
   displayName: string;
+  dateOfBirth: string | null;
 }
 
-export interface VitalRecord {
+export interface VitalEntry {
   id: string;
   patientId: string;
-  date: string;
-  systolicMmhg: number | null;
-  diastolicMmhg: number | null;
-  pulseBpm: number | null;
-  temperatureC: number | null;
-  weightKg: number | null;
-  heightCm: number | null;
-  painScore: number | null;
-  glucoseMgDl: number | null;
-  version: number;
+  kind: VitalField;
+  value: number;
+  observedDate: string;
+  observedTime: string;
+  submissionId: string;
   createdAt: string;
-  updatedAt: string;
 }
 
-export type Requirements = Record<VitalField, boolean>;
+/** The rows of one save, shown in the Vitalwerte tab as one line. */
+export interface EntryGroup {
+  submissionId: string;
+  category: MeasurementCategory;
+  observedDate: string;
+  observedTime: string;
+  values: Partial<Record<VitalField, number>>;
+  createdAt: string;
+}
 
-/** Fields a patient expects unless the teacher overrides them. */
-export const DEFAULT_EXPECTED_FIELDS: readonly VitalField[] = ['systolic', 'diastolic', 'pulse'];
+export type RecentEntries = Record<MeasurementCategory, EntryGroup[]>;
 
 export interface CareReport {
   id: string;

@@ -1,83 +1,51 @@
 import { expect, test } from '@playwright/test';
-import { loginAsGroup, openPatient, saveCell, vitalwerteUrl } from './helpers';
-
-test.beforeEach(async ({ page }) => {
-  await loginAsGroup(page);
-});
-
-test('chart hover drives the whole table column and its red cell', async ({ page }) => {
-  const patientId = await openPatient(page);
-  await page.goto(vitalwerteUrl(patientId, '2028-03-05'));
-
-  await page.getByTestId('band-2028-03-06').hover();
-  await expect(
-    page.getByTestId('date-header-2028-03-06').getByRole('button'),
-  ).toHaveAttribute('aria-current', 'date');
-
-  const cell = page.getByTestId('cell-2028-03-06-diastolic');
-  await expect(cell).toHaveClass(/bg-accent-soft/);
-  await expect(cell).toHaveAttribute('data-missing', 'true');
-  await expect(cell.getByRole('button')).toHaveText('Fehlt');
-
-  await page.mouse.move(4, 4);
-  await expect(
-    page.getByTestId('date-header-2028-03-05').getByRole('button'),
-  ).toHaveAttribute('aria-current', 'date');
-});
-
-test('the warning clears once every expected value is saved', async ({ page }) => {
-  const patientId = await openPatient(page);
-  await page.goto(vitalwerteUrl(patientId, '2028-03-07'));
-
-  await expect(page.getByTestId('missing-warning')).toContainText('Fehlende Werte');
-  await saveCell(page, '2028-03-07', 'systolic', '118');
-  await saveCell(page, '2028-03-07', 'diastolic', '76');
-  await saveCell(page, '2028-03-07', 'pulse', '68');
-
-  await expect(page.getByTestId('missing-warning')).toContainText(
-    'alle erwarteten Werte erfasst',
-  );
-});
+import { dashboardUrl, openPatient, saveEntry, vitalwerteUrl } from './helpers';
 
 test('the picker distinguishes 29 February 2028 from 2027', async ({ page }) => {
-  const patientId = await openPatient(page);
-  await page.goto(vitalwerteUrl(patientId, '2028-02-28'));
+  const patientId = await openPatient(page, 4);
+  await page.goto(vitalwerteUrl(patientId));
 
-  await page.getByLabel('Tag', { exact: true }).fill('29');
-  await page.getByLabel('Monat', { exact: true }).fill('2');
-  await page.getByLabel('Jahr', { exact: true }).fill('2028');
-  await page.getByLabel('Jahr', { exact: true }).press('Enter');
-  await expect(page.getByTestId('selected-date')).toHaveText('Ausgewählt: 29.02.2028');
-
-  await page.getByLabel('Jahr', { exact: true }).fill('2027');
-  await page.getByLabel('Jahr', { exact: true }).press('Enter');
+  await page.getByRole('textbox', { name: 'Tag', exact: true }).fill('29');
+  await page.getByRole('textbox', { name: 'Monat', exact: true }).fill('2');
+  await page.getByRole('textbox', { name: 'Jahr', exact: true }).fill('2027');
+  await page.getByRole('textbox', { name: 'Jahr', exact: true }).press('Enter');
   await expect(page.getByText(/existiert nicht/)).toBeVisible();
-  await expect(page.getByTestId('selected-date')).toHaveText('Ausgewählt: 29.02.2028');
+
+  await page.getByRole('textbox', { name: 'Jahr', exact: true }).fill('2028');
+  await page.getByRole('textbox', { name: 'Jahr', exact: true }).press('Enter');
+  await expect(page.getByText(/existiert nicht/)).toHaveCount(0);
+});
+
+test('hovering a value box highlights its chart marker', async ({ page }) => {
+  const patientId = await openPatient(page, 5);
+  await page.goto(vitalwerteUrl(patientId));
+  await saveEntry(page, 'Puls', { pulse: '88' }, '13:30');
+
+  await page.goto(dashboardUrl(patientId));
+  await page.getByRole('button', { name: /Puls 88 Schläge\/min/ }).hover();
+  await expect(page.getByRole('tooltip')).toContainText('13:30');
+  await expect(page.locator('circle[data-highlighted="true"]')).toHaveCount(1);
+
+  await page.mouse.move(2, 2);
+  await expect(page.locator('circle[data-highlighted="true"]')).toHaveCount(0);
 });
 
 test.describe('touch', () => {
   test.use({ hasTouch: true });
 
-  test('tap selects a date and holding a cell opens one editor', async ({ page }) => {
-    const patientId = await openPatient(page);
-    await page.goto(vitalwerteUrl(patientId, '2028-03-08'));
+  test('tap shows the label and highlights, tap elsewhere dismisses', async ({ page }) => {
+    const patientId = await openPatient(page, 6);
+    await page.goto(vitalwerteUrl(patientId));
+    await saveEntry(page, 'Puls', { pulse: '91' }, '15:45');
 
-    await page.getByTestId('band-2028-03-09').tap();
-    await expect(page.getByTestId('selected-date')).toHaveText('Ausgewählt: 09.03.2028');
+    await page.goto(dashboardUrl(patientId));
+    const box = page.getByRole('button', { name: /Puls 91 Schläge\/min/ });
+    await box.scrollIntoViewIfNeeded();
+    await box.tap();
+    await expect(page.getByRole('tooltip')).toContainText('15:45');
+    await expect(page.locator('circle[data-highlighted="true"]')).toHaveCount(1);
 
-    const cell = page.getByTestId('cell-2028-03-09-pulse');
-    await cell.scrollIntoViewIfNeeded();
-    const box = await cell.boundingBox();
-    if (!box) throw new Error('Zelle nicht sichtbar.');
-
-    const client = await page.context().newCDPSession(page);
-    await client.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
-    });
-    await page.waitForTimeout(700);
-    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-
-    await expect(cell.getByRole('textbox')).toBeVisible();
+    await page.getByRole('heading', { name: 'Dashboard' }).tap();
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
   });
 });

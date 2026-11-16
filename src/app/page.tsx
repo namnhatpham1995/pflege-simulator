@@ -8,19 +8,19 @@ export default function HomePage() {
       </p>
       <h1 className="text-3xl font-semibold text-ink">Übungssimulator für die Pflegedokumentation</h1>
       <p className="text-base text-ink-muted">
-        Zehn Lerngruppen dokumentieren Vitalwerte und Pflegeberichte für zehn fiktive Patienten.
-        Alle Personen und Werte in dieser Anwendung sind erfunden.
+        Zehn fiktive Patienten für die Übung der Vitalwerte und Pflegeberichte. Alle Personen und
+        Werte in dieser Anwendung sind erfunden.
       </p>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-4">
         <Link
-          href="/login"
-          className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-medium text-white hover:bg-blue-800"
+          href="/patients"
+          className="inline-flex h-11 items-center rounded-md bg-accent px-6 text-sm font-semibold text-white hover:bg-blue-800"
         >
-          Anmelden
+          Start
         </Link>
-        <span className="inline-flex h-10 items-center rounded-md border border-line px-4 text-sm text-ink-muted">
-          Zugangscode der Gruppe verwenden
-        </span>
+        <Link href="/login" className="text-sm text-ink-muted underline-offset-4 hover:underline">
+          Anmeldung für die Lehrkraft
+        </Link>
       </div>
     </main>
   );

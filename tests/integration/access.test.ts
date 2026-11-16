@@ -1,13 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { patients, sessions, studentGroups } from '@/db/schema';
+import { patients, sessions } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
+import type { Actor } from '@/lib/types';
 import {
   hashSessionToken,
   requireActor,
   SESSION_ABSOLUTE_TIMEOUT_MS,
   SESSION_IDLE_TIMEOUT_MS,
 } from '@/server/auth/session';
-import { assertSameOrigin, requirePatientAccess, requireTeacher } from '@/server/services/access';
+import {
+  anonymousActor,
+  assertSameOrigin,
+  assertStudentWrite,
+  requirePatientAccess,
+  requireTeacher,
+} from '@/server/services/access';
 import { appDatabase } from '../helpers/database';
 import type { Database } from '@/db/client';
 
@@ -15,10 +22,9 @@ let db: Database;
 
 const patientA = { id: 'p-a', displayName: 'Frau Albrecht' };
 const patientB = { id: 'p-b', displayName: 'Herr Brandt' };
-const groupA = { id: 'g-a', displayName: 'Gruppe 1' };
 
-const groupToken = 'group-token-for-tests';
 const teacherToken = 'teacher-token-for-tests';
+const legacyGroupToken = 'legacy-group-token';
 
 function requestWithToken(url: string, token?: string, origin?: string): Request {
   const headers: Record<string, string> = {};
@@ -43,30 +49,23 @@ beforeAll(async () => {
   const now = new Date();
 
   await db.insert(patients).values([
-    { ...patientA, createdAt: now.toISOString() },
+    { ...patientA, dateOfBirth: '1948-03-07', createdAt: now.toISOString() },
     { ...patientB, createdAt: now.toISOString() },
   ]);
-  await db.insert(studentGroups).values({
-    id: groupA.id,
-    displayName: groupA.displayName,
-    patientId: patientA.id,
-    accessCodeHash: 'scrypt$16384$8$1$00112233445566778899aabbccddeeff$' + 'a'.repeat(64),
-    isActive: 1,
-  });
 
   await db.insert(sessions).values([
     {
-      idHash: hashSessionToken(groupToken),
-      actorType: 'group',
-      actorId: groupA.id,
+      idHash: hashSessionToken(teacherToken),
+      actorType: 'teacher',
+      actorId: 'teacher',
       createdAt: now.toISOString(),
       lastSeenAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TIMEOUT_MS).toISOString(),
     },
     {
-      idHash: hashSessionToken(teacherToken),
-      actorType: 'teacher',
-      actorId: 'teacher',
+      idHash: hashSessionToken(legacyGroupToken),
+      actorType: 'group',
+      actorId: 'g-old',
       createdAt: now.toISOString(),
       lastSeenAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_TIMEOUT_MS).toISOString(),
@@ -79,51 +78,58 @@ afterAll(async () => {
   await closeDatabase();
 });
 
-describe('authorisation matrix', () => {
-  it('refuses an anonymous request with 401', async () => {
+describe('open patient access', () => {
+  it('lets an anonymous visitor read any patient with an anonymous student actor', async () => {
+    const access = await requirePatientAccess(patientA.id, requestWithToken('http://localhost/api'));
+    expect(access.actor).toMatchObject({
+      type: 'group',
+      id: `patient:${patientA.id}`,
+      patientId: patientA.id,
+    });
+    expect(access.patient).toMatchObject({
+      id: patientA.id,
+      dateOfBirth: '1948-03-07',
+    });
+  });
+
+  it('answers 404 for an unknown patient', async () => {
     await expectHttpError(
-      requirePatientAccess(patientA.id, requestWithToken('http://localhost/api')),
-      401,
-      'UNAUTHENTICATED',
+      requirePatientAccess('missing', requestWithToken('http://localhost/api')),
+      404,
+      'NOT_FOUND',
     );
   });
 
-  it('lets a group read its own patient', async () => {
-    const access = await requirePatientAccess(
-      patientA.id,
-      requestWithToken('http://localhost/api', groupToken),
-    );
-    expect(access.actor.type).toBe('group');
-    expect(access.patient.id).toBe(patientA.id);
-  });
-
-  it("refuses another group's patient with 403", async () => {
-    await expectHttpError(
-      requirePatientAccess(patientB.id, requestWithToken('http://localhost/api', groupToken)),
-      403,
-      'FORBIDDEN',
-    );
-  });
-
-  it('lets the teacher read any patient but refuses the teacher console to a group', async () => {
+  it('lets the teacher read every patient', async () => {
     const access = await requirePatientAccess(
       patientB.id,
       requestWithToken('http://localhost/api', teacherToken),
     );
     expect(access.actor.type).toBe('teacher');
+  });
 
+  it('ignores an old group session instead of granting a group actor', async () => {
+    const access = await requirePatientAccess(
+      patientB.id,
+      requestWithToken('http://localhost/api', legacyGroupToken),
+    );
+    expect(access.actor.id).toBe(`patient:${patientB.id}`);
+  });
+
+  it('refuses teacher writes while students may write', () => {
+    expect(() => assertStudentWrite(anonymousActor(patientA.id))).not.toThrow();
+    const teacher: Actor = { type: 'teacher', id: 'teacher', displayName: 'Lehrkraft' };
+    expect(() => assertStudentWrite(teacher)).toThrow(HttpError);
+  });
+
+  it('answers 401 on teacher surfaces without a session and allows the teacher', async () => {
     await expectHttpError(
-      requireTeacher(requestWithToken('http://localhost/api', groupToken)),
-      403,
-      'FORBIDDEN',
+      requireTeacher(requestWithToken('http://localhost/api')),
+      401,
+      'UNAUTHENTICATED',
     );
     const teacher = await requireTeacher(requestWithToken('http://localhost/api', teacherToken));
     expect(teacher.id).toBe('teacher');
-  });
-
-  it('resolves the group actor with its assigned patient id', async () => {
-    const actor = await requireActor(requestWithToken('http://localhost/api', groupToken));
-    expect(actor).toMatchObject({ type: 'group', id: groupA.id, patientId: patientA.id });
   });
 
   it('rejects an expired session', async () => {
