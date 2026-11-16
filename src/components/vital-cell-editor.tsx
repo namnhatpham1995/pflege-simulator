@@ -46,7 +46,8 @@ export function VitalCellEditor({
   }
 
   /** Touch users can press and hold a cell instead of tapping it. */
-  function beginHold() {
+  function beginHold(event: React.PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType !== 'touch') return;
     cancelHold();
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
