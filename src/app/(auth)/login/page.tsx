@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/login-form';
 import { requireActor } from '@/server/auth/session';
@@ -31,6 +32,12 @@ export default async function LoginPage() {
       <div className="rounded-lg border border-line bg-surface p-5 shadow-panel">
         <LoginForm />
       </div>
+      <Link
+        href="/"
+        className="inline-flex h-11 w-fit items-center rounded-md border border-line px-5 text-sm font-semibold text-ink hover:bg-surface"
+      >
+        ← Zurück zur Startseite
+      </Link>
     </main>
   );
 }
