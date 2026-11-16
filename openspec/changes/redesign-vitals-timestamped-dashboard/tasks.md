@@ -62,7 +62,7 @@
 - [x] 9.1 Run `npm run verify` and `npm run test:e2e` on the integrated branch and verify both pass with no skipped or deleted-to-pass tests
 - [x] 9.2 Check every scenario in `specs/` against a test or a recorded manual check and list any gap in the task notes; verify no scenario is unaccounted for
 - [x] 9.3 After `add-nursing-documentation-simulator` is archived, back up Turso if class data exists, apply migration `0001` to Turso with the app migrator and verify the new table and column exist and the current production release still serves `/login` and the patient list
-- [ ] 9.4 Deploy to production and run the smoke from the design's migration plan (Start, save each category, Dashboard day and week, delete, teacher sign-in, edit name and date of birth, teacher sees no input controls); verify each step on https://pflege-simulator.vercel.app and record the result in `docs/runbook.md`
+- [x] 9.4 Deploy to production and run the smoke from the design's migration plan (Start, save each category, Dashboard day and week, delete, teacher sign-in, edit name and date of birth, teacher sees no input controls); verify each step on https://pflege-simulator.vercel.app and record the result in `docs/runbook.md`
 - [ ] 9.5 Rehearse the rollback by promoting the previous deployment in a preview environment against the migrated database; verify it serves the patient list and ignores `vital_entries`
 
 ## Workflow follow-up
@@ -83,5 +83,6 @@
 ## Production notes (2026-11-16)
 
 - 9.3 done with deviations: the older change is not archived yet (its 8.8 and 8.9 are open), and the backup is a JSON export because the Turso CLI is not installed. Migration `0001` is applied; counts are unchanged.
-- 9.4 stays open: deployed and smoke-tested (see `docs/runbook.md`), but teacher sign-in, details edit and the teacher no-inputs check were not run because the teacher plaintext password is not available here.
+- 9.4 done: deployed and smoke-tested including teacher sign-in, a date-of-birth edit and clear via the API, and the teacher page having no input controls (see `docs/runbook.md`). A rename to a new name and the dialog UI were not exercised on production.
 - 9.5 stays open: the previous deployment was only requested directly (`/login` 200, `/api/patients` 401); no promote rehearsal was performed.
+- The teacher password is now a plain `TEACHER_PASSWORD` env var (Vercel production updated, `TEACHER_PASSWORD_HASH` removed); the `hash-password` script is gone.

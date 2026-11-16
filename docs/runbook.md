@@ -120,9 +120,13 @@ und vom Seed nicht überschrieben. Es gibt keinen Erwartungs-Editor mehr.
   Zeilen; Dashboard (Tag, Woche) und Vitalwerte 200; fremde Origin 403; anonymer Lehrkraft-Aufruf
   401; Löschen aller Smoke-Einträge 200, danach leer, zweites Löschen 404. Die Smoke-Einträge
   sind gelöscht; Auditzeilen bleiben bestehen.
-- **Nicht geprüft:** Lehrkraft-Anmeldung, Ändern von Name und Geburtsdatum und die Ansicht der
-  Lehrkraft ohne Eingabefelder auf Produktion (das Klartext-Passwort liegt hier nicht vor);
-  Backup-Restore in eine Scratch-Datenbank.
+- **Lehrkraft auf Produktion (2026-11-16, nach Umstellung auf `TEACHER_PASSWORD`):** falsches
+  Passwort 401, richtiges Passwort 200, `/teacher` mit Sitzung 200; Geburtsdatum per
+  `PATCH /api/patients/{id}` gesetzt (200) und wieder geleert; die Vitalwerte-Seite der Lehrkraft
+  enthält kein Eingabefeld und keinen Speichern-Button, die der Studierenden sechs Eingabefelder.
+  Ein Umbenennen mit neuem Namen wurde nicht ausgeführt (Name unverändert zurückgesendet), die
+  Browser-Oberfläche des Dialogs wurde auf Produktion nicht bedient.
+- **Nicht geprüft:** Backup-Restore in eine Scratch-Datenbank.
 - **Rollback-Probe (eingeschränkt):** Die vorherige Version (`pflege-simulator-575ydotmp`)
   wurde direkt angefragt statt promoted: `/login` 200 und `/api/patients` 401 gegen die
   migrierte Datenbank. Ein echtes Promote wurde nicht ausgeführt, um die Produktion nicht zu
