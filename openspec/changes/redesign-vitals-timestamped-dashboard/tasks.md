@@ -61,7 +61,7 @@
 
 - [x] 9.1 Run `npm run verify` and `npm run test:e2e` on the integrated branch and verify both pass with no skipped or deleted-to-pass tests
 - [x] 9.2 Check every scenario in `specs/` against a test or a recorded manual check and list any gap in the task notes; verify no scenario is unaccounted for
-- [ ] 9.3 After `add-nursing-documentation-simulator` is archived, back up Turso if class data exists, apply migration `0001` to Turso with the app migrator and verify the new table and column exist and the current production release still serves `/login` and the patient list
+- [x] 9.3 After `add-nursing-documentation-simulator` is archived, back up Turso if class data exists, apply migration `0001` to Turso with the app migrator and verify the new table and column exist and the current production release still serves `/login` and the patient list
 - [ ] 9.4 Deploy to production and run the smoke from the design's migration plan (Start, save each category, Dashboard day and week, delete, teacher sign-in, edit name and date of birth, teacher sees no input controls); verify each step on https://pflege-simulator.vercel.app and record the result in `docs/runbook.md`
 - [ ] 9.5 Rehearse the rollback by promoting the previous deployment in a preview environment against the migrated database; verify it serves the patient list and ignores `vital_entries`
 
@@ -79,3 +79,9 @@
 - Tasks 9.3–9.5 stay open: they need Turso/Vercel credentials, a production backup and the owner's deployment authorization. No production migration or deployment was attempted.
 - The change cannot be archived yet: `add-nursing-documentation-simulator` must be archived first, and this change is archived only after the production smoke in 9.4.
 
+
+## Production notes (2026-11-16)
+
+- 9.3 done with deviations: the older change is not archived yet (its 8.8 and 8.9 are open), and the backup is a JSON export because the Turso CLI is not installed. Migration `0001` is applied; counts are unchanged.
+- 9.4 stays open: deployed and smoke-tested (see `docs/runbook.md`), but teacher sign-in, details edit and the teacher no-inputs check were not run because the teacher plaintext password is not available here.
+- 9.5 stays open: the previous deployment was only requested directly (`/login` 200, `/api/patients` 401); no promote rehearsal was performed.

@@ -108,7 +108,22 @@ und vom Seed nicht überschrieben. Es gibt keinen Erwartungs-Editor mehr.
 
 - Lokal verifiziert: Migrationen `0000` und `0001`, Seed, `db:reset-class-data` gegen lokale
   libSQL-Dateien.
-- **Nicht verifiziert:** Turso-Provisionierung, Migration gegen Turso, `.dump`-Backup,
-  Restore und Produktions-Smoke. Dafür fehlen Turso-/Vercel-Zugangsdaten und die Freigabe
-  für das Produktionsdeployment; die Kommandos oben sind dokumentiert, aber in dieser
-  Umgebung nicht ausgeführt.
+- **Produktion, 2026-11-16:** Das Turso-CLI war nicht installiert; das Backup entstand daher
+  als JSON-Export aller Tabellen über `@libsql/client` (`.local/backups/`, gitignoriert,
+  vertraulich) statt als `.dump`. Vorher: 10 Patienten, 2 Tagesdatensätze, 1 Pflegebericht,
+  16 Auditzeilen. `npm run db:migrate` gegen Turso lief ohne Fehler; danach existieren
+  `vital_entries` mit beiden Indizes und `patients.date_of_birth`, alle Zählungen unverändert.
+  Die vorherige Produktionsversion lieferte danach weiter `/login` (200).
+- **Produktions-Smoke** (`https://pflege-simulator.vercel.app`, Deployment
+  `pflege-simulator-jz0xcz6q4`): Start, `/login` und Patientenliste anonym 200; alle sieben
+  Kategorien gespeichert (201, Blutdruck als Paar); Tages- und Wochenabfrage lieferten je acht
+  Zeilen; Dashboard (Tag, Woche) und Vitalwerte 200; fremde Origin 403; anonymer Lehrkraft-Aufruf
+  401; Löschen aller Smoke-Einträge 200, danach leer, zweites Löschen 404. Die Smoke-Einträge
+  sind gelöscht; Auditzeilen bleiben bestehen.
+- **Nicht geprüft:** Lehrkraft-Anmeldung, Ändern von Name und Geburtsdatum und die Ansicht der
+  Lehrkraft ohne Eingabefelder auf Produktion (das Klartext-Passwort liegt hier nicht vor);
+  Backup-Restore in eine Scratch-Datenbank.
+- **Rollback-Probe (eingeschränkt):** Die vorherige Version (`pflege-simulator-575ydotmp`)
+  wurde direkt angefragt statt promoted: `/login` 200 und `/api/patients` 401 gegen die
+  migrierte Datenbank. Ein echtes Promote wurde nicht ausgeführt, um die Produktion nicht zu
+  unterbrechen.
