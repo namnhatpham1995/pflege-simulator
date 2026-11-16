@@ -49,13 +49,13 @@ Owns: `src/app/(auth)/**`, `src/app/api/auth/**`, `src/server/auth/login.ts`, `s
 
 Owns: `src/app/api/patients/[patientId]/vitals/**`, `src/server/services/vitals.ts`, `src/lib/validation/vitals.ts`, `src/lib/vitals.ts`, `docs/vitals-api.md`. Must not touch: the schema, `src/app/(app)/**`, `src/components/**` owned by Group 5. Acceptance: one record per day survives a concurrent double save, a stale version is a 409 with the current record, and pain 0 is distinguishable from empty.
 
-- [ ] 3.1 Write the field keys, units and plausibility ranges as one exported table and the Zod schema with strict keys, null clearing and comma-decimal preprocessing, and verify unit tests for each range boundary, a comma value, an unknown key and a `shift` key
-- [ ] 3.2 Implement range reads with the 31-day cap, ascending order and the requirements lookup, and verify integration tests for an inclusive range, a reversed range and an over-long range
-- [ ] 3.3 Implement the transactional save: version check, create on version 0, merge with stored values, cross-field validation on the merged record, audit insert and the 409 payload; verify integration tests for stale update, concurrent first insert, clearing the last value and pain 0
-- [ ] 3.4 Wire `GET /vitals`, `GET /vitals/:date` and `PATCH /vitals/:date` and verify route tests for 401, 403 cross-group, 400 invalid date, 400 invalid body and 409 with `current`
-- [ ] 3.5 Verify an accepted save writes exactly one audit row with the changed fields and previous values, and that a refused save writes none
-- [ ] 3.6 Write `docs/vitals-api.md` with request and response examples for read, save, clear and conflict, and verify every example against a running route in a test
-- [ ] 3.7 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 3.1 Write the field keys, units and plausibility ranges as one exported table and the Zod schema with strict keys, null clearing and comma-decimal preprocessing, and verify unit tests for each range boundary, a comma value, an unknown key and a `shift` key
+- [x] 3.2 Implement range reads with the 31-day cap, ascending order and the requirements lookup, and verify integration tests for an inclusive range, a reversed range and an over-long range
+- [x] 3.3 Implement the transactional save: version check, create on version 0, merge with stored values, cross-field validation on the merged record, audit insert and the 409 payload; verify integration tests for stale update, concurrent first insert, clearing the last value and pain 0
+- [x] 3.4 Wire `GET /vitals`, `GET /vitals/:date` and `PATCH /vitals/:date` and verify route tests for 401, 403 cross-group, 400 invalid date, 400 invalid body and 409 with `current`
+- [x] 3.5 Verify an accepted save writes exactly one audit row with the changed fields and previous values, and that a refused save writes none
+- [x] 3.6 Write `docs/vitals-api.md` with request and response examples for read, save, clear and conflict, and verify every example against a running route in a test
+- [x] 3.7 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 4. Date picker (G3) — W1
 

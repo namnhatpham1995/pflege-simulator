@@ -17,12 +17,17 @@ export class HttpError extends Error {
   readonly code: ApiErrorCode;
   readonly fields?: Record<string, string>;
   readonly retryAfterSeconds?: number;
+  readonly extra?: Record<string, unknown>;
 
   constructor(
     status: number,
     code: ApiErrorCode,
     message: string = DEFAULT_MESSAGES[code],
-    options: { fields?: Record<string, string>; retryAfterSeconds?: number } = {},
+    options: {
+      fields?: Record<string, string>;
+      retryAfterSeconds?: number;
+      extra?: Record<string, unknown>;
+    } = {},
   ) {
     super(message);
     this.name = 'HttpError';
@@ -30,6 +35,7 @@ export class HttpError extends Error {
     this.code = code;
     this.fields = options.fields;
     this.retryAfterSeconds = options.retryAfterSeconds;
+    this.extra = options.extra;
   }
 
   static unauthenticated(message?: string): HttpError {
@@ -63,7 +69,7 @@ export class HttpError extends Error {
 
 export interface MappedError {
   status: number;
-  body: ApiErrorBody;
+  body: ApiErrorBody & Record<string, unknown>;
   headers?: Record<string, string>;
 }
 
@@ -74,6 +80,10 @@ function zodFields(error: ZodError): Record<string, string> {
     if (!fields[path]) fields[path] = issue.message;
   }
   return fields;
+}
+
+export function validationErrorFromZod(error: ZodError): HttpError {
+  return HttpError.validation(zodFields(error));
 }
 
 export function mapError(error: unknown): MappedError {
@@ -89,7 +99,11 @@ export function mapError(error: unknown): MappedError {
     if (error.retryAfterSeconds !== undefined) {
       headers['Retry-After'] = String(error.retryAfterSeconds);
     }
-    return { status: error.status, body, ...(Object.keys(headers).length > 0 ? { headers } : {}) };
+    return {
+      status: error.status,
+      body: { ...body, ...(error.extra ?? {}) },
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    };
   }
 
   if (error instanceof ZodError) {
