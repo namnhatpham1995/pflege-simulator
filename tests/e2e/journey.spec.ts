@@ -1,6 +1,20 @@
 import { expect, test } from '@playwright/test';
 import { loginAsGroup, openPatient, saveCell, vitalwerteUrl } from './helpers';
 
+test('the section tabs lead to Pflegebericht and back', async ({ page }) => {
+  await loginAsGroup(page);
+  await openPatient(page);
+
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('link', { name: 'Pflegebericht' }).click();
+  await expect(page).toHaveURL(/\/pflegebericht$/, { timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Pflegebericht' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Vitalwerte' }).click();
+  await expect(page).toHaveURL(/\/vitalwerte$/, { timeout: 15_000 });
+  await expect(page.getByTestId('selected-date')).toBeVisible();
+});
+
 test('group login, save, reload and a stale edit answer 409', async ({ page }) => {
   await loginAsGroup(page);
   const patientId = await openPatient(page);
