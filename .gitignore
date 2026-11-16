@@ -4,5 +4,29 @@ node_modules/
 __pycache__/
 *.pyc
 .env
+.env.local
+.env.*.local
 .DS_Store
 Thumbs.db
+
+# Local database and generated assets
+.local/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Next.js build output and generated types
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Parallel worktrees and coordination reports
+.worktrees/
+plans/
+
+# Tests
+coverage/
+playwright-report/
+test-results/
