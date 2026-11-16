@@ -36,14 +36,14 @@ Owns: the scaffold, the whole schema and its single migration, the seed, the sha
 
 Owns: `src/app/(auth)/**`, `src/app/api/auth/**`, `src/server/auth/login.ts`, `src/server/auth/rate-limit.ts`, `src/components/login-form.tsx`, `src/app/(app)/layout.tsx`, the patient area shell, `src/components/section-tabs.tsx`, `src/app/api/patients/route.ts`, `src/server/services/patients.ts`, `docs/access.md`. Must not touch: `src/db/**`, `package.json`, `src/server/services/access.ts`, `src/app/globals.css`. Acceptance: a group signs in with its own code, sees only its patient, and a guessed patient id is refused by the API.
 
-- [ ] 2.1 Build the login page with student-code and teacher-credential modes and the client form, and verify a component test covers required fields, pending state and the generic error message
-- [ ] 2.2 Implement `POST /api/auth/login` with scrypt verification, session rotation, cookie attributes and the generic failure; verify route tests for valid code, unknown code, inactive group and an already-present cookie
-- [ ] 2.3 Implement the database-backed login limiter with the two keys from `design.md` D3, and verify tests for the fifth failure returning 429 with `Retry-After`, a success clearing the key, and a different group unaffected
-- [ ] 2.4 Implement `POST /api/auth/logout`, idle and absolute session expiry, and the page-level guard; verify a test proves the old cookie is unauthenticated after logout and after the idle period
-- [ ] 2.5 Implement `src/server/services/patients.ts` and `GET /api/patients` returning the authorised list only, and verify a group sees one patient, the teacher sees ten, and an anonymous call is 401 JSON
-- [ ] 2.6 Build the authenticated shell with patient header, `Vitalwerte`/`Pflegebericht` tabs and logout, and verify a component test marks the active section and that a layout test redirects an anonymous visitor to the login page
-- [ ] 2.7 Write `docs/access.md` covering the login flow, session lifetimes and how to generate `TEACHER_PASSWORD_HASH`, and verify the documented command produces a hash that the login test accepts
-- [ ] 2.8 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 2.1 Build the login page with student-code and teacher-credential modes and the client form, and verify a component test covers required fields, pending state and the generic error message
+- [x] 2.2 Implement `POST /api/auth/login` with scrypt verification, session rotation, cookie attributes and the generic failure; verify route tests for valid code, unknown code, inactive group and an already-present cookie
+- [x] 2.3 Implement the database-backed login limiter with the two keys from `design.md` D3, and verify tests for the fifth failure returning 429 with `Retry-After`, a success clearing the key, and a different group unaffected
+- [x] 2.4 Implement `POST /api/auth/logout`, idle and absolute session expiry, and the page-level guard; verify a test proves the old cookie is unauthenticated after logout and after the idle period
+- [x] 2.5 Implement `src/server/services/patients.ts` and `GET /api/patients` returning the authorised list only, and verify a group sees one patient, the teacher sees ten, and an anonymous call is 401 JSON
+- [x] 2.6 Build the authenticated shell with patient header, `Vitalwerte`/`Pflegebericht` tabs and logout, and verify a component test marks the active section and that a layout test redirects an anonymous visitor to the login page
+- [x] 2.7 Write `docs/access.md` covering the login flow, session lifetimes and how to generate `TEACHER_PASSWORD_HASH`, and verify the documented command produces a hash that the login test accepts
+- [x] 2.8 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 3. Vitalwerte data (G2) — W1
 
