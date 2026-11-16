@@ -1,5 +1,59 @@
 # pflege-simulator
 
-A simulator for Pflege (German for care / nursing).
+German-language teaching simulator for nursing documentation (*Pflegedokumentation – Simulation*).
+Ten fictional patients with timestamped vital-sign entries and shift-aware care reports.
+All identities and values are invented; the application refuses real patient data.
 
-Status: initial repository setup. The simulator itself is not built yet.
+Status: the timestamped-entry redesign is implemented — Dashboard (Tag/Woche), the
+Vitalwerte entry tab with seven categories, open access for students, patient details for the
+teacher, and the unchanged Pflegebericht. Deployment and the Turso migration remain release
+steps that need credentials and owner authorization.
+
+## Stack
+
+Next.js (App Router) + TypeScript (strict) + Tailwind CSS, Drizzle ORM on libSQL, Zod. Local
+development uses a libSQL file; production uses Turso Cloud with `TURSO_DATABASE_URL` and
+`TURSO_AUTH_TOKEN` on the server only.
+
+## Local setup
+
+```bash
+npm install
+cp .env.example .env.local      # then set SESSION_SECRET (32+ chars) and TEACHER_PASSWORD
+npm run db:migrate               # creates .local/dev.db and applies 0000 + 0001
+npm run db:seed                  # ten fictional patients, no groups, no access codes
+npm run dev
+```
+
+The teacher signs in with the plain `TEACHER_PASSWORD` from the environment. Students need no credential: the front page offers **Start**
+and the patient list is open.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run verify` | Typecheck, lint and unit/integration tests |
+| `npm test` | Vitest (unit, integration, component) |
+| `npm run test:e2e` | Playwright browser suite against `.local/e2e.db` |
+| `npm run db:migrate` | Apply the tracked migrations with the app migrator |
+| `npm run db:seed` | Idempotent seed of the ten patients |
+| `npm run db:reset-class-data -- --confirm RESET` | Clear a term's measurements and reports |
+| `npm run worktree -- create <branch>` | Parallel checkout with its own port and database |
+
+Package manager is npm on this machine; `docs/parallel-work.md` records the frozen foundation
+files and the group ownership from the first delivery.
+
+## Notes
+
+- A measurement entry holds one kind, one value, one `YYYY-MM-DD` date and one `HH:MM` time.
+  Any number of entries per kind and day is allowed; same-minute duplicates are two entries.
+- Absence is a missing row, never a zero. Pain 0 is a real entry.
+- Calendar dates and times are stored as strings, never timestamps; "today" is
+  `Europe/Berlin`.
+- Blood pressure is saved as two rows sharing one `submission_id` and deleted as one unit.
+- Teacher sessions use one scrypt-hashed password; the teacher reads everything and writes
+  nothing except patient names and dates of birth.
+- Class-data reset clears `vital_entries`, reports, revisions and audit while keeping the
+  patients and their edited details.
