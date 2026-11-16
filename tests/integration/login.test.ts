@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { loginAttempts, patients, sessions, studentGroups } from '@/db/schema';
 import { HttpError } from '@/lib/api-error';
 import {

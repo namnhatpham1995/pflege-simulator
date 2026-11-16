@@ -61,12 +61,12 @@ Owns: `src/app/api/patients/[patientId]/vitals/**`, `src/server/services/vitals.
 
 Owns: `src/components/date-parts-picker.tsx`, `src/components/calendar-popover.tsx`, their test files. Must not touch: `src/lib/date.ts`, any API route, `package.json`. Acceptance: day, month and year are independently editable, 31 February is refused without a request, and keyboard-only operation reaches every control.
 
-- [ ] 4.1 Build the controlled picker with three labelled inputs, a day list that follows month length, a twelve-month list and free numeric year entry, and verify component tests for February 2028 (29 days), February 2027 (28) and a typed year 2126
-- [ ] 4.2 Build the month-view calendar popover that writes a full date and returns focus to its trigger on Escape, and verify component tests for opening, choosing a date, Escape and focus restoration
-- [ ] 4.3 Implement invalid-combination handling that shows an inline error, emits no change and keeps the previous value, and verify tests for 31 February and for leap days in 2028 and 2027
-- [ ] 4.4 Add keyboard navigation for the lists and the popover and verify tests using only `tab`, `enter`, `escape` and arrow keys
-- [ ] 4.5 Add touch and pointer selection and verify the picker still emits one change per interaction in a component test with pointer events
-- [ ] 4.6 Run `pnpm verify` for this group and report the result with the files touched
+- [x] 4.1 Build the controlled picker with three labelled inputs, a day list that follows month length, a twelve-month list and free numeric year entry, and verify component tests for February 2028 (29 days), February 2027 (28) and a typed year 2126
+- [x] 4.2 Build the month-view calendar popover that writes a full date and returns focus to its trigger on Escape, and verify component tests for opening, choosing a date, Escape and focus restoration
+- [x] 4.3 Implement invalid-combination handling that shows an inline error, emits no change and keeps the previous value, and verify tests for 31 February and for leap days in 2028 and 2027
+- [x] 4.4 Add keyboard navigation for the lists and the popover and verify tests using only `tab`, `enter`, `escape` and arrow keys
+- [x] 4.5 Add touch and pointer selection and verify the picker still emits one change per interaction in a component test with pointer events
+- [x] 4.6 Run `pnpm verify` for this group and report the result with the files touched
 
 ## 5. Visualisation (G4) — W1
 
